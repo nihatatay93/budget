@@ -1,0 +1,5 @@
+# Health probes have no client input and therefore no meaningful 4xx response.
+openapi.yaml:
+  operation-4xx-response:
+    - "#/paths/~1healthz/get/responses"
+    - "#/paths/~1readyz/get/responses"

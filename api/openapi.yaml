@@ -1,0 +1,2150 @@
+openapi: 3.1.0
+info:
+  title: Budget API
+  version: 0.0.0
+  description: Shared API contract for the Budget server, web application, and iOS application.
+  license:
+    name: MIT
+    identifier: MIT
+servers:
+  - url: /
+paths:
+  /healthz:
+    get:
+      operationId: getHealth
+      summary: Check process health
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+      responses:
+        "200":
+          description: The server process is healthy.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /readyz:
+    get:
+      operationId: getReadiness
+      summary: Check application readiness
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+      responses:
+        "200":
+          description: The application and database are ready.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        "503":
+          description: A required dependency is unavailable.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /v1/auth/register:
+    post:
+      operationId: register
+      summary: Register a user and create their initial workspace
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: The user, workspace, and session were created.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+            Set-Cookie:
+              $ref: "#/components/headers/SetCookie"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /v1/auth/login:
+    post:
+      operationId: login
+      summary: Create an authenticated session
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Authentication succeeded.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+            Set-Cookie:
+              $ref: "#/components/headers/SetCookie"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /v1/auth/logout:
+    post:
+      operationId: logout
+      summary: Revoke the current session
+      security:
+        - cookieSession: []
+        - bearerSession: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+      responses:
+        "204":
+          description: The session was revoked.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+            Set-Cookie:
+              $ref: "#/components/headers/SetCookie"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /v1/session:
+    get:
+      operationId: getSession
+      summary: Get the current user and accessible workspaces
+      security:
+        - cookieSession: []
+        - bearerSession: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+      responses:
+        "200":
+          description: The current authenticated session.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /v1/invitations/accept:
+    post:
+      operationId: acceptWorkspaceInvitation
+      summary: Accept a workspace invitation as the authenticated user
+      description: >-
+        Accepts a single-use invitation bearer token from the request body. The token is not
+        placed in the request URL and the invitation email is not used as identity proof.
+      security:
+        - cookieSession: []
+        - bearerSession: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AcceptWorkspaceInvitationRequest"
+      responses:
+        "200":
+          description: The invitation was accepted, or a same-user acceptance was replayed.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceMembershipAcceptance"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "410":
+          $ref: "#/components/responses/Gone"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /v1/workspaces/{workspaceId}/members:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceID"
+    get:
+      operationId: listWorkspaceMembers
+      summary: List active workspace members
+      security:
+        - cookieSession: []
+        - bearerSession: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+      responses:
+        "200":
+          description: Active memberships in the workspace.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceMemberListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /v1/workspaces/{workspaceId}/members/{userId}:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceID"
+      - $ref: "#/components/parameters/MemberUserID"
+    patch:
+      operationId: updateWorkspaceMemberRole
+      summary: Change an active workspace member's role
+      security:
+        - cookieSession: []
+        - bearerSession: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateWorkspaceMemberRoleRequest"
+      responses:
+        "200":
+          description: The membership role was changed.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceMember"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    delete:
+      operationId: removeWorkspaceMember
+      summary: Remove a member or leave the workspace
+      description: >-
+        Soft-removes the membership. Any member may target themselves; owner and administrator
+        removal of other members follows the collaboration role policy.
+      security:
+        - cookieSession: []
+        - bearerSession: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+      responses:
+        "204":
+          description: The membership was removed.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /v1/workspaces/{workspaceId}/invitations:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceID"
+    get:
+      operationId: listWorkspaceInvitations
+      summary: List pending workspace invitations
+      security:
+        - cookieSession: []
+        - bearerSession: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+      responses:
+        "200":
+          description: Unaccepted, unrevoked, and unexpired workspace invitations.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceInvitationListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    post:
+      operationId: createWorkspaceInvitation
+      summary: Create or replace a workspace invitation
+      description: >-
+        Returns the raw acceptance token exactly once. Replacing a pending invitation for
+        the same normalized email invalidates its previous token.
+      security:
+        - cookieSession: []
+        - bearerSession: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateWorkspaceInvitationRequest"
+      responses:
+        "201":
+          description: The invitation was created and its one-time token disclosed.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateWorkspaceInvitationResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /v1/workspaces/{workspaceId}/invitations/{invitationId}:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceID"
+      - $ref: "#/components/parameters/InvitationID"
+    delete:
+      operationId: revokeWorkspaceInvitation
+      summary: Revoke a pending workspace invitation
+      security:
+        - cookieSession: []
+        - bearerSession: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+      responses:
+        "204":
+          description: The invitation was revoked.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /v1/workspaces/{workspaceId}/accounts:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceID"
+    get:
+      operationId: listAccounts
+      summary: List accounts in a workspace
+      security:
+        - cookieSession: []
+        - bearerSession: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+        - $ref: "#/components/parameters/IncludeArchived"
+      responses:
+        "200":
+          description: Workspace accounts and their posted balances.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    post:
+      operationId: createAccount
+      summary: Create an account in a workspace
+      security:
+        - cookieSession: []
+        - bearerSession: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountWriteRequest"
+      responses:
+        "201":
+          description: The account was created.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /v1/workspaces/{workspaceId}/accounts/{accountId}:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceID"
+      - $ref: "#/components/parameters/AccountID"
+    get:
+      operationId: getAccount
+      summary: Get an account in a workspace
+      security:
+        - cookieSession: []
+        - bearerSession: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+      responses:
+        "200":
+          description: The requested account.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    put:
+      operationId: updateAccount
+      summary: Replace editable account fields
+      security:
+        - cookieSession: []
+        - bearerSession: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountWriteRequest"
+      responses:
+        "200":
+          description: The account was updated.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    delete:
+      operationId: archiveAccount
+      summary: Archive an account without deleting its history
+      security:
+        - cookieSession: []
+        - bearerSession: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+      responses:
+        "204":
+          description: The account was archived.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /v1/workspaces/{workspaceId}/transactions:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceID"
+    get:
+      operationId: listTransactions
+      summary: List recent transaction aggregates in a workspace
+      security:
+        - cookieSession: []
+        - bearerSession: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+        - $ref: "#/components/parameters/TransactionFromDate"
+        - $ref: "#/components/parameters/TransactionToDate"
+        - $ref: "#/components/parameters/TransactionLimit"
+      responses:
+        "200":
+          description: Recent non-deleted transactions with entries and allocations.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    post:
+      operationId: createTransaction
+      summary: Create and book a complete transaction aggregate
+      security:
+        - cookieSession: []
+        - bearerSession: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransactionWriteRequest"
+      responses:
+        "201":
+          description: The transaction aggregate was created.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /v1/workspaces/{workspaceId}/transactions/{transactionId}:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceID"
+      - $ref: "#/components/parameters/TransactionID"
+    get:
+      operationId: getTransaction
+      summary: Get a transaction aggregate
+      security:
+        - cookieSession: []
+        - bearerSession: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+      responses:
+        "200":
+          description: The requested transaction aggregate.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    put:
+      operationId: updateTransaction
+      summary: Replace a complete transaction aggregate
+      security:
+        - cookieSession: []
+        - bearerSession: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransactionWriteRequest"
+      responses:
+        "200":
+          description: The transaction aggregate was replaced.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    delete:
+      operationId: deleteTransaction
+      summary: Soft-delete a transaction aggregate
+      security:
+        - cookieSession: []
+        - bearerSession: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+      responses:
+        "204":
+          description: The transaction was soft-deleted.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /v1/workspaces/{workspaceId}/financial-projection:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceID"
+    get:
+      operationId: getFinancialProjection
+      summary: Get account balances and period financial projections
+      description: >-
+        Returns cumulative account balances through to_date and allocation-derived income,
+        spending, and category activity for the inclusive reporting window. Posted values are
+        authoritative; pending and projected values remain explicit. When dates are omitted,
+        the server uses workspace-local month-to-date.
+      security:
+        - cookieSession: []
+        - bearerSession: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+        - $ref: "#/components/parameters/ProjectionFromDate"
+        - $ref: "#/components/parameters/ProjectionToDate"
+      responses:
+        "200":
+          description: The workspace financial projection.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinancialProjection"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /v1/workspaces/{workspaceId}/budgets:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceID"
+    get:
+      operationId: getMonthlyBudget
+      summary: Get a monthly spending budget and its posted usage
+      description: >-
+        Returns the requested calendar-month budget. When month is omitted, the server
+        resolves the current month in the workspace timezone. Usage is derived from posted,
+        non-deleted expense allocations and includes each item's category descendants.
+      security:
+        - cookieSession: []
+        - bearerSession: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+        - $ref: "#/components/parameters/BudgetMonthQuery"
+      responses:
+        "200":
+          description: The monthly budget and allocation-derived usage.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonthlyBudget"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /v1/workspaces/{workspaceId}/budgets/{month}:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceID"
+      - $ref: "#/components/parameters/BudgetMonthPath"
+    put:
+      operationId: replaceMonthlyBudget
+      summary: Create or replace a complete monthly spending budget
+      description: >-
+        Atomically replaces the named month plan and its complete item set. Items use
+        workspace-base minor units and may not target overlapping category branches.
+      security:
+        - cookieSession: []
+        - bearerSession: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MonthlyBudgetWriteRequest"
+      responses:
+        "200":
+          description: The monthly budget was created or replaced.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonthlyBudget"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /v1/workspaces/{workspaceId}/exchange-rates:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceID"
+    get:
+      operationId: listExchangeRates
+      summary: List display conversion rates from the workspace base currency
+      description: >-
+        Rates are for display only and must never be used to derive stored financial amounts.
+        Returns 503 when rate fetching is disabled or the provider is unavailable; clients
+        treat that as "show no converted figure" rather than as an error.
+      security:
+        - cookieSession: []
+        - bearerSession: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+      responses:
+        "200":
+          description: Conversion rates from the workspace base currency.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExchangeRateListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "503":
+          description: Exchange rates are unavailable or disabled.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /v1/workspaces/{workspaceId}/categories:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceID"
+    get:
+      operationId: listCategories
+      summary: List categories in a workspace
+      security:
+        - cookieSession: []
+        - bearerSession: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+        - $ref: "#/components/parameters/IncludeArchived"
+      responses:
+        "200":
+          description: Workspace categories.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    post:
+      operationId: createCategory
+      summary: Create a category in a workspace
+      security:
+        - cookieSession: []
+        - bearerSession: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryWriteRequest"
+      responses:
+        "201":
+          description: The category was created.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+  /v1/workspaces/{workspaceId}/categories/{categoryId}:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceID"
+      - $ref: "#/components/parameters/CategoryID"
+    get:
+      operationId: getCategory
+      summary: Get a category in a workspace
+      security:
+        - cookieSession: []
+        - bearerSession: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+      responses:
+        "200":
+          description: The requested category.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    put:
+      operationId: updateCategory
+      summary: Replace editable category fields
+      security:
+        - cookieSession: []
+        - bearerSession: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CategoryWriteRequest"
+      responses:
+        "200":
+          description: The category was updated.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    delete:
+      operationId: archiveCategory
+      summary: Archive a category without deleting its history
+      security:
+        - cookieSession: []
+        - bearerSession: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+      responses:
+        "204":
+          description: The category was archived.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+components:
+  parameters:
+    RequestID:
+      name: X-Request-ID
+      in: header
+      required: false
+      description: Optional caller-provided correlation identifier.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+        pattern: "^[A-Za-z0-9._:-]+$"
+    WorkspaceID:
+      name: workspaceId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    AccountID:
+      name: accountId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    CategoryID:
+      name: categoryId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    TransactionID:
+      name: transactionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    MemberUserID:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    InvitationID:
+      name: invitationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    TransactionFromDate:
+      name: from_date
+      in: query
+      required: false
+      schema:
+        type: string
+        format: date
+    TransactionToDate:
+      name: to_date
+      in: query
+      required: false
+      schema:
+        type: string
+        format: date
+    TransactionLimit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 100
+    ProjectionFromDate:
+      name: from_date
+      in: query
+      required: false
+      description: Inclusive activity-period start. Must be supplied with to_date.
+      schema:
+        type: string
+        format: date
+    ProjectionToDate:
+      name: to_date
+      in: query
+      required: false
+      description: >-
+        Inclusive activity-period end and cumulative balance cutoff. Must be supplied with
+        from_date.
+      schema:
+        type: string
+        format: date
+    BudgetMonthQuery:
+      name: month
+      in: query
+      required: false
+      description: Calendar month in YYYY-MM form. Defaults to the workspace-local current month.
+      schema:
+        type: string
+        pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+        example: "2026-08"
+    BudgetMonthPath:
+      name: month
+      in: path
+      required: true
+      description: Calendar month in YYYY-MM form.
+      schema:
+        type: string
+        pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+        example: "2026-08"
+    IncludeArchived:
+      name: include_archived
+      in: query
+      required: false
+      schema:
+        type: boolean
+        default: false
+  headers:
+    RequestID:
+      description: Correlation identifier assigned to the request.
+      schema:
+        type: string
+    SetCookie:
+      description: Present when a browser cookie session is created or cleared.
+      schema:
+        type: string
+  responses:
+    BadRequest:
+      description: The request is malformed or fails validation.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Authentication is required or the credentials are invalid.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: The authenticated session is not permitted to perform this request.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: The requested resource conflicts with existing state.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: The requested resource does not exist in the workspace.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Gone:
+      description: The requested invitation is expired, revoked, or already consumed.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    InternalServerError:
+      description: An unexpected server error occurred.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ServiceUnavailable:
+      description: An optional dependency required for this operation is unavailable.
+      headers:
+        X-Request-ID:
+          $ref: "#/components/headers/RequestID"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+  schemas:
+    HealthResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+      properties:
+        status:
+          type: string
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+      properties:
+        error:
+          $ref: "#/components/schemas/APIError"
+    APIError:
+      type: object
+      additionalProperties: false
+      required:
+        - code
+        - message
+        - request_id
+      properties:
+        code:
+          type: string
+          pattern: "^[a-z][a-z0-9_]*$"
+        message:
+          type: string
+        request_id:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+    SessionTransport:
+      type: string
+      enum:
+        - cookie
+        - bearer
+    RegisterRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - email
+        - password
+        - display_name
+        - workspace_name
+        - base_currency
+        - timezone
+        - transport
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        password:
+          type: string
+          format: password
+          minLength: 15
+          maxLength: 128
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        workspace_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        base_currency:
+          $ref: "#/components/schemas/Currency"
+        timezone:
+          type: string
+          minLength: 1
+          maxLength: 100
+        transport:
+          $ref: "#/components/schemas/SessionTransport"
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - email
+        - password
+        - transport
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        password:
+          type: string
+          format: password
+          maxLength: 128
+        transport:
+          $ref: "#/components/schemas/SessionTransport"
+    User:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - email
+        - display_name
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        display_name:
+          type: string
+    WorkspaceSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - base_currency
+        - timezone
+        - role
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        base_currency:
+          $ref: "#/components/schemas/Currency"
+        timezone:
+          type: string
+        role:
+          $ref: "#/components/schemas/WorkspaceRole"
+    WorkspaceRole:
+      type: string
+      enum:
+        - owner
+        - admin
+        - member
+        - viewer
+    WorkspaceInvitationRole:
+      type: string
+      enum:
+        - admin
+        - member
+        - viewer
+    WorkspaceMember:
+      type: object
+      additionalProperties: false
+      required:
+        - user_id
+        - email
+        - display_name
+        - role
+        - joined_at
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        display_name:
+          type: string
+        role:
+          $ref: "#/components/schemas/WorkspaceRole"
+        joined_at:
+          type: string
+          format: date-time
+    WorkspaceMemberListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - members
+      properties:
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkspaceMember"
+    WorkspaceInvitation:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - workspace_id
+        - email
+        - role
+        - invited_by
+        - inviter_display_name
+        - expires_at
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        role:
+          $ref: "#/components/schemas/WorkspaceInvitationRole"
+        invited_by:
+          type: string
+          format: uuid
+        inviter_display_name:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+    WorkspaceInvitationListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - invitations
+      properties:
+        invitations:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkspaceInvitation"
+    CreateWorkspaceInvitationRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - email
+        - role
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        role:
+          $ref: "#/components/schemas/WorkspaceInvitationRole"
+    CreateWorkspaceInvitationResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - invitation
+        - acceptance_token
+      properties:
+        invitation:
+          $ref: "#/components/schemas/WorkspaceInvitation"
+        acceptance_token:
+          type: string
+          minLength: 43
+          maxLength: 43
+          description: Returned once. Treat as a credential and never log it.
+    AcceptWorkspaceInvitationRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - token
+      properties:
+        token:
+          type: string
+          minLength: 43
+          maxLength: 43
+    WorkspaceMembershipAcceptance:
+      type: object
+      additionalProperties: false
+      required:
+        - workspace
+        - member
+      properties:
+        workspace:
+          $ref: "#/components/schemas/WorkspaceSummary"
+        member:
+          $ref: "#/components/schemas/WorkspaceMember"
+    UpdateWorkspaceMemberRoleRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - role
+      properties:
+        role:
+          $ref: "#/components/schemas/WorkspaceRole"
+    SessionResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - user
+        - workspaces
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        workspaces:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkspaceSummary"
+    AuthResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - user
+        - workspaces
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        workspaces:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkspaceSummary"
+        bearer_token:
+          type: string
+          description: Present only when the requested transport is bearer.
+    Currency:
+      type: string
+      description: >-
+        Supported currency codes. All members use two minor-unit decimal places.
+        See docs/decisions/0005-supported-currencies-and-display-conversion.md.
+      enum:
+        - TRY
+        - USD
+        - EUR
+    AccountType:
+      type: string
+      enum:
+        - bank
+        - cash
+        - credit_card
+        - savings
+        - investment
+        - other
+    AccountWriteRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - type
+        - currency
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        type:
+          $ref: "#/components/schemas/AccountType"
+        currency:
+          $ref: "#/components/schemas/Currency"
+        institution_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+    Account:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - workspace_id
+        - name
+        - type
+        - currency
+        - balance_minor
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          $ref: "#/components/schemas/AccountType"
+        currency:
+          $ref: "#/components/schemas/Currency"
+        institution_name:
+          type: string
+        archived_at:
+          type: string
+          format: date-time
+        balance_minor:
+          type: integer
+          format: int64
+          description: Sum of posted, non-deleted transaction entries for the account.
+    AccountListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - accounts
+      properties:
+        accounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Account"
+    CategoryKind:
+      type: string
+      enum:
+        - expense
+        - income
+    SystemCategoryKey:
+      type: string
+      enum:
+        - uncategorized_expense
+        - uncategorized_income
+    CategoryWriteRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - kind
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        kind:
+          $ref: "#/components/schemas/CategoryKind"
+        parent_id:
+          type: string
+          format: uuid
+        icon:
+          type: string
+          minLength: 1
+          maxLength: 64
+    Category:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - workspace_id
+        - name
+        - kind
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+          format: uuid
+        parent_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        kind:
+          $ref: "#/components/schemas/CategoryKind"
+        system_key:
+          allOf:
+            - $ref: "#/components/schemas/SystemCategoryKey"
+          readOnly: true
+        icon:
+          type: string
+        archived_at:
+          type: string
+          format: date-time
+    CategoryListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - categories
+      properties:
+        categories:
+          type: array
+          items:
+            $ref: "#/components/schemas/Category"
+    ExchangeRate:
+      type: object
+      additionalProperties: false
+      required:
+        - base_currency
+        - quote_currency
+        - rate
+        - rate_date
+      properties:
+        base_currency:
+          $ref: "#/components/schemas/Currency"
+        quote_currency:
+          $ref: "#/components/schemas/Currency"
+        rate:
+          type: string
+          description: >-
+            Decimal multiplier from base to quote, as a string so no precision is lost in
+            transit. One unit of base_currency equals this many units of quote_currency.
+        rate_date:
+          type: string
+          format: date
+          description: >-
+            Publication date of the rate. Reference rates are published on working days only,
+            so this can be earlier than today and must be shown with any converted figure.
+    ExchangeRateListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - rates
+      properties:
+        rates:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExchangeRate"
+    ProjectionAmounts:
+      type: object
+      additionalProperties: false
+      required:
+        - posted
+        - pending
+        - projected
+      properties:
+        posted:
+          type: integer
+          format: int64
+        pending:
+          type: integer
+          format: int64
+        projected:
+          type: integer
+          format: int64
+          description: Sum of posted and pending; this is not a forecast.
+    FinancialProjectionPeriod:
+      type: object
+      additionalProperties: false
+      required:
+        - from_date
+        - to_date
+        - timezone
+        - base_currency
+      properties:
+        from_date:
+          type: string
+          format: date
+        to_date:
+          type: string
+          format: date
+        timezone:
+          type: string
+        base_currency:
+          $ref: "#/components/schemas/Currency"
+    FinancialProjectionSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - balance_base_minor
+        - income_base_minor
+        - spending_base_minor
+      properties:
+        balance_base_minor:
+          $ref: "#/components/schemas/ProjectionAmounts"
+        income_base_minor:
+          $ref: "#/components/schemas/ProjectionAmounts"
+        spending_base_minor:
+          $ref: "#/components/schemas/ProjectionAmounts"
+    FinancialProjectionAccount:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - type
+        - currency
+        - native_balance_minor
+        - base_balance_minor
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          $ref: "#/components/schemas/AccountType"
+        currency:
+          $ref: "#/components/schemas/Currency"
+        archived_at:
+          type: string
+          format: date-time
+        native_balance_minor:
+          $ref: "#/components/schemas/ProjectionAmounts"
+        base_balance_minor:
+          $ref: "#/components/schemas/ProjectionAmounts"
+    FinancialProjectionCategory:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - kind
+        - direct_base_minor
+        - rolled_up_base_minor
+      properties:
+        id:
+          type: string
+          format: uuid
+        parent_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        kind:
+          $ref: "#/components/schemas/CategoryKind"
+        system_key:
+          allOf:
+            - $ref: "#/components/schemas/SystemCategoryKey"
+          readOnly: true
+        icon:
+          type: string
+        archived_at:
+          type: string
+          format: date-time
+        direct_base_minor:
+          $ref: "#/components/schemas/ProjectionAmounts"
+        rolled_up_base_minor:
+          $ref: "#/components/schemas/ProjectionAmounts"
+    FinancialProjection:
+      type: object
+      additionalProperties: false
+      required:
+        - period
+        - summary
+        - accounts
+        - categories
+      properties:
+        period:
+          $ref: "#/components/schemas/FinancialProjectionPeriod"
+        summary:
+          $ref: "#/components/schemas/FinancialProjectionSummary"
+        accounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/FinancialProjectionAccount"
+        categories:
+          type: array
+          items:
+            $ref: "#/components/schemas/FinancialProjectionCategory"
+    MonthlyBudgetItemWrite:
+      type: object
+      additionalProperties: false
+      required:
+        - category_id
+        - amount_base_minor
+      properties:
+        category_id:
+          type: string
+          format: uuid
+        amount_base_minor:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Planned amount in workspace base-currency minor units.
+    MonthlyBudgetWriteRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - items
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        items:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            $ref: "#/components/schemas/MonthlyBudgetItemWrite"
+    MonthlyBudgetItem:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - category_id
+        - category_name
+        - planned_base_minor
+        - used_base_minor
+        - remaining_base_minor
+      properties:
+        id:
+          type: string
+          format: uuid
+        category_id:
+          type: string
+          format: uuid
+        category_name:
+          type: string
+        category_icon:
+          type: string
+        category_archived_at:
+          type: string
+          format: date-time
+        planned_base_minor:
+          type: integer
+          format: int64
+        used_base_minor:
+          type: integer
+          format: int64
+          description: Posted expense usage; refunds reduce this signed reporting value.
+        remaining_base_minor:
+          type: integer
+          format: int64
+    MonthlyBudget:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - workspace_id
+        - name
+        - month
+        - timezone
+        - base_currency
+        - planned_base_minor
+        - used_base_minor
+        - remaining_base_minor
+        - items
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        month:
+          type: string
+          pattern: '^\d{4}-(0[1-9]|1[0-2])$'
+        timezone:
+          type: string
+        base_currency:
+          $ref: "#/components/schemas/Currency"
+        planned_base_minor:
+          type: integer
+          format: int64
+        used_base_minor:
+          type: integer
+          format: int64
+        remaining_base_minor:
+          type: integer
+          format: int64
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MonthlyBudgetItem"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    TransactionKind:
+      type: string
+      enum:
+        - standard
+        - transfer
+        - adjustment
+    TransactionStatus:
+      type: string
+      enum:
+        - pending
+        - posted
+    TransactionSource:
+      type: string
+      enum:
+        - manual
+        - recurring
+        - import
+        - api
+    TransactionEntryWrite:
+      type: object
+      additionalProperties: false
+      required:
+        - account_id
+        - amount_minor
+      properties:
+        account_id:
+          type: string
+          format: uuid
+        amount_minor:
+          type: integer
+          format: int64
+          description: Signed amount in the account currency.
+        base_amount_minor:
+          type: integer
+          format: int64
+          description: >-
+            Optional explicit historical value in workspace base currency. It must equal
+            amount_minor for a base-currency account; foreign accounts require this value
+            when automatic historical rates are unavailable.
+    TransactionAllocationWrite:
+      type: object
+      additionalProperties: false
+      required:
+        - category_id
+        - amount_base_minor
+      properties:
+        category_id:
+          type: string
+          format: uuid
+        amount_base_minor:
+          type: integer
+          format: int64
+    TransactionWriteRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - status
+        - transaction_date
+        - entries
+      properties:
+        kind:
+          $ref: "#/components/schemas/TransactionKind"
+        status:
+          $ref: "#/components/schemas/TransactionStatus"
+        transaction_date:
+          type: string
+          format: date
+        payee:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          minLength: 1
+          maxLength: 500
+        notes:
+          type: string
+          minLength: 1
+          maxLength: 4000
+        entries:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/TransactionEntryWrite"
+        allocations:
+          type: array
+          maxItems: 100
+          default: []
+          items:
+            $ref: "#/components/schemas/TransactionAllocationWrite"
+    TransactionEntry:
+      type: object
+      additionalProperties: false
+      required:
+        - account_id
+        - amount_minor
+        - base_amount_minor
+      properties:
+        account_id:
+          type: string
+          format: uuid
+        amount_minor:
+          type: integer
+          format: int64
+        base_amount_minor:
+          type: integer
+          format: int64
+    TransactionAllocation:
+      type: object
+      additionalProperties: false
+      required:
+        - category_id
+        - amount_base_minor
+      properties:
+        category_id:
+          type: string
+          format: uuid
+        amount_base_minor:
+          type: integer
+          format: int64
+    Transaction:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - workspace_id
+        - kind
+        - status
+        - transaction_date
+        - source
+        - created_by
+        - updated_by
+        - created_at
+        - updated_at
+        - entries
+        - allocations
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspace_id:
+          type: string
+          format: uuid
+        kind:
+          $ref: "#/components/schemas/TransactionKind"
+        status:
+          $ref: "#/components/schemas/TransactionStatus"
+        transaction_date:
+          type: string
+          format: date
+        payee:
+          type: string
+        description:
+          type: string
+        notes:
+          type: string
+        source:
+          $ref: "#/components/schemas/TransactionSource"
+        created_by:
+          type: string
+          format: uuid
+        updated_by:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransactionEntry"
+        allocations:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransactionAllocation"
+    TransactionListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - transactions
+      properties:
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Transaction"
+  securitySchemes:
+    cookieSession:
+      type: apiKey
+      in: cookie
+      name: budget_session
+    bearerSession:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque

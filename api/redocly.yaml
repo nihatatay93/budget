@@ -1,0 +1,6 @@
+extends:
+  - recommended
+
+apis:
+  budget@v1:
+    root: ./openapi.yaml

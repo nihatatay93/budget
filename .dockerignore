@@ -1,0 +1,15 @@
+.git
+.github/workflows/private-*.yml
+.github/workflows/private-*.yaml
+.codex
+.DS_Store
+.env
+.env.*
+AGENTS.md
+docs/internal
+plans
+apps/web/node_modules
+apps/web/coverage
+apps/web/dist
+apps/server/internal/webui/dist
+apps/ios/DerivedData

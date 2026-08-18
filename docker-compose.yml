@@ -1,0 +1,64 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-budget}
+      POSTGRES_USER: ${POSTGRES_USER:-budget}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres-data:/var/lib/postgresql
+
+  application:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    environment:
+      BUDGET_ENV: production
+      BUDGET_HTTP_ADDR: :8080
+      BUDGET_PUBLIC_ORIGIN: ${BUDGET_PUBLIC_ORIGIN:-http://localhost:8080}
+      BUDGET_DATABASE_URL: postgres://${POSTGRES_USER:-budget}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-budget}?sslmode=disable
+      BUDGET_EXCHANGE_RATES_ENABLED: ${BUDGET_EXCHANGE_RATES_ENABLED:-false}
+      BUDGET_EXCHANGE_RATES_BASE_URL: ${BUDGET_EXCHANGE_RATES_BASE_URL:-https://api.frankfurter.dev}
+      BUDGET_EXCHANGE_RATES_TIMEOUT: ${BUDGET_EXCHANGE_RATES_TIMEOUT:-10s}
+      BUDGET_SMTP_ENABLED: ${BUDGET_SMTP_ENABLED:-false}
+      BUDGET_SMTP_HOST: ${BUDGET_SMTP_HOST:-}
+      BUDGET_SMTP_PORT: ${BUDGET_SMTP_PORT:-587}
+      BUDGET_SMTP_USERNAME: ${BUDGET_SMTP_USERNAME:-}
+      BUDGET_SMTP_PASSWORD: ${BUDGET_SMTP_PASSWORD:-}
+      BUDGET_SMTP_FROM_ADDRESS: ${BUDGET_SMTP_FROM_ADDRESS:-}
+      BUDGET_SMTP_FROM_NAME: ${BUDGET_SMTP_FROM_NAME:-Budget}
+      BUDGET_SMTP_TIMEOUT: ${BUDGET_SMTP_TIMEOUT:-15s}
+      BUDGET_AUTH_RATE_LIMIT: ${BUDGET_AUTH_RATE_LIMIT:-20}
+      BUDGET_AUTH_RATE_BURST: ${BUDGET_AUTH_RATE_BURST:-10}
+      BUDGET_TRUSTED_PROXIES: ${BUDGET_TRUSTED_PROXIES:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      # Host port is configurable; 8080 is often already taken.
+      - "${BUDGET_HTTP_PORT:-8080}:8080"
+
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["proxy"]
+    environment:
+      BUDGET_HOSTNAME: ${BUDGET_HOSTNAME:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - application
+
+volumes:
+  postgres-data:
+  caddy-data:
+  caddy-config:

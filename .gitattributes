@@ -1,0 +1,18 @@
+# Private development artifacts must never be included in public release exports.
+AGENTS.md export-ignore
+.codex/ export-ignore
+docs/internal/ export-ignore
+plans/ export-ignore
+
+# Local/editor artifacts should not appear in source archives.
+.DS_Store export-ignore
+.idea/ export-ignore
+.vscode/ export-ignore
+
+# Public CI is part of the release surface. Add file-specific export-ignore entries here
+# for any future private-only GitHub workflows.
+.github/workflows/private-*.yml export-ignore
+.github/workflows/private-*.yaml export-ignore
+
+# Private release tooling is not shipped to the public mirror.
+scripts/release-public.sh export-ignore

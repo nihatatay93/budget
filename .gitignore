@@ -1,0 +1,37 @@
+# macOS and editor metadata
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Go
+apps/server/bin/
+apps/server/coverage.out
+
+# Web
+apps/web/node_modules/
+apps/web/coverage/
+apps/web/dist/
+apps/web/*.tsbuildinfo
+
+# Generated production web assets are created only inside the Docker build.
+apps/server/internal/webui/dist/
+
+# Xcode
+apps/ios/DerivedData/
+apps/ios/BudgetAPI/.build/
+apps/ios/BudgetAPI/Package.resolved
+apps/ios/*.xcworkspace/xcuserdata/
+apps/ios/*.xcodeproj/xcuserdata/
+apps/ios/**/xcuserdata/
+
+# Temporary files
+tmp/
+*.tmp
