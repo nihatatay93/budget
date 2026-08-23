@@ -2,12 +2,20 @@ import SwiftUI
 
 struct WorkspaceSetupView: View {
     let workspace: BudgetWorkspace
-    let currentUserID: String
+    let session: UserSession
     @ObservedObject var model: AppModel
+    let onSelectWorkspace: (String) -> Void
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @SceneStorage("selectedWorkspaceTab") private var selectedTabRawValue = WorkspaceTab.overview.rawValue
+    @State private var hasLoadedWorkspace = false
+    @State private var transactionSearchText = ""
+    @State private var transactionStatusScope = TransactionStatusScope.all
+    @State private var transactionKindScope = TransactionKindScope.all
     @State private var accountEditorPresented = false
     @State private var categoryEditorPresented = false
     @State private var transactionEditorPresented = false
+    @State private var invitationAcceptancePresented = false
     @State private var editingAccount: BudgetAccount?
     @State private var editingCategory: BudgetCategory?
     @State private var editingTransaction: BudgetTransaction?
@@ -17,164 +25,58 @@ struct WorkspaceSetupView: View {
     private var canManage: Bool { workspace.canManage }
 
     var body: some View {
-        List {
-            if model.isLoadingResources {
-                Section {
-                    HStack {
-                        Spacer()
-                        ProgressView("Loading workspace…")
-                        Spacer()
-                    }
-                }
-            }
-
-            Section("Overview") {
-                NavigationLink {
-                    FinancialDashboardView(workspace: workspace, model: model)
-                } label: {
-                    ProjectionOverviewRow(
-                        projection: model.financialProjection,
-                        isLoading: model.isLoadingResources
-                    )
-                }
-                NavigationLink {
-                    MonthlyBudgetView(workspace: workspace, model: model)
-                } label: {
-                    Label("Monthly budget", systemImage: "chart.pie.fill")
-                }
-            }
-
-            Section("Accounts") {
-                BaseCurrencyTotalView(
-                    workspace: workspace,
-                    accounts: model.accounts,
-                    rates: model.exchangeRates
-                )
-                if !model.isLoadingResources && model.accounts.isEmpty {
-                    ContentUnavailableView(
-                        "No accounts",
-                        systemImage: "building.columns",
-                        description: Text("Create an account to begin tracking money.")
-                    )
-                }
-                ForEach(model.accounts) { account in
-                    Button {
-                        guard canManage else { return }
-                        editingAccount = account
-                        accountEditorPresented = true
-                    } label: {
-                        AccountRow(account: account)
-                    }
-                    .buttonStyle(.plain)
-                    .swipeActions {
-                        if canManage {
-                            Button("Archive", role: .destructive) {
-                                archiveTarget = .account(account)
-                            }
-                        }
-                    }
-                }
-            }
-
-            Section("Categories") {
-                ForEach(categoryTree(model.categories)) { row in
-                    let category = row.category
-                    Button {
-                        guard canManage, !category.isSystem else { return }
-                        editingCategory = category
-                        categoryEditorPresented = true
-                    } label: {
-                        CategoryRow(
-                            category: category,
-                            depth: row.depth
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .swipeActions {
-                        if canManage && !category.isSystem {
-                            Button("Archive", role: .destructive) {
-                                archiveTarget = .category(category)
-                            }
-                        }
-                    }
-                }
-            }
-
-            Section("Transactions") {
-                if !model.isLoadingResources && model.transactions.isEmpty {
-                    ContentUnavailableView(
-                        "No transactions",
-                        systemImage: "list.bullet.rectangle",
-                        description: Text("Record an expense, income, transfer, or adjustment.")
-                    )
-                }
-                ForEach(model.transactions) { transaction in
-                    Button {
-                        guard canManage else { return }
-                        editingTransaction = transaction
-                        transactionEditorPresented = true
-                    } label: {
-                        TransactionRow(
-                            transaction: transaction,
-                            workspace: workspace,
-                            accounts: model.accounts
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .swipeActions {
-                        if canManage {
-                            Button("Delete", role: .destructive) {
-                                deleteTransactionTarget = transaction
-                            }
-                        }
-                    }
-                }
-            }
-
-            Section("People") {
-                NavigationLink {
-                    WorkspaceCollaborationView(
-                        workspace: workspace, currentUserID: currentUserID, model: model
-                    )
-                } label: {
-                    Label("Members and invitations", systemImage: "person.2")
-                }
-            }
-
-            if !canManage {
-                Section {
-                    Label("Viewer access is read-only.", systemImage: "eye")
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-        .navigationTitle(workspace.name)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            if canManage {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu("Add", systemImage: "plus") {
-                        Button("Account", systemImage: "building.columns") {
-                            editingAccount = nil
-                            accountEditorPresented = true
-                        }
-                        Button("Category", systemImage: "tag") {
-                            editingCategory = nil
-                            categoryEditorPresented = true
-                        }
-                        Button("Transaction", systemImage: "list.bullet.rectangle") {
+        TabView(selection: selectedTabSelection) {
+            NavigationStack {
+                workspaceContent {
+                    WorkspaceOverviewView(
+                        workspace: workspace,
+                        model: model,
+                        onAddTransaction: {
                             editingTransaction = nil
                             transactionEditorPresented = true
-                        }
-                    }
+                        },
+                        onOpenTransactions: { selectTab(.transactions) },
+                        onOpenBudget: { selectTab(.budget) }
+                    )
                 }
             }
+            .tabItem { tabLabel(.overview) }
+            .tag(WorkspaceTab.overview)
+
+            NavigationStack {
+                workspaceContent { transactionsView }
+            }
+            .tabItem { tabLabel(.transactions) }
+            .tag(WorkspaceTab.transactions)
+
+            NavigationStack {
+                workspaceContent {
+                    MonthlyBudgetView(workspace: workspace, model: model)
+                }
+            }
+            .tabItem { tabLabel(.budget) }
+            .tag(WorkspaceTab.budget)
+
+            NavigationStack {
+                workspaceContent { accountsView }
+            }
+            .tabItem { tabLabel(.accounts) }
+            .tag(WorkspaceTab.accounts)
+
+            NavigationStack {
+                workspaceContent { moreView }
+            }
+            .tabItem { tabLabel(.more) }
+            .tag(WorkspaceTab.more)
+        }
+        .transaction { transaction in
+            if reduceMotion { transaction.animation = nil }
         }
         .task(id: workspace.id) {
+            hasLoadedWorkspace = false
             await model.loadResources(workspaceID: workspace.id)
-        }
-        .refreshable {
-            await model.loadResources(workspaceID: workspace.id)
+            guard !Task.isCancelled else { return }
+            hasLoadedWorkspace = true
         }
         .sheet(isPresented: $accountEditorPresented) {
             AccountEditorView(workspace: workspace, account: editingAccount, model: model)
@@ -195,6 +97,9 @@ struct WorkspaceSetupView: View {
                 categories: model.categories,
                 model: model
             )
+        }
+        .sheet(isPresented: $invitationAcceptancePresented) {
+            InvitationAcceptanceView(model: model)
         }
         .confirmationDialog(
             archiveTarget?.confirmationTitle ?? "Archive item?",
@@ -217,6 +122,11 @@ struct WorkspaceSetupView: View {
                 }
             }
             Button("Cancel", role: .cancel) { archiveTarget = nil }
+        } message: {
+            Text(
+                archiveTarget?.confirmationMessage
+                    ?? "Historical financial records will remain intact."
+            )
         }
         .confirmationDialog(
             "Delete this transaction?",
@@ -226,7 +136,7 @@ struct WorkspaceSetupView: View {
             ),
             titleVisibility: .visible
         ) {
-            Button("Delete", role: .destructive) {
+            Button("Delete transaction", role: .destructive) {
                 guard let transaction = deleteTransactionTarget else { return }
                 Task {
                     await model.deleteTransaction(
@@ -238,7 +148,7 @@ struct WorkspaceSetupView: View {
             }
             Button("Cancel", role: .cancel) { deleteTransactionTarget = nil }
         } message: {
-            Text("Its entries will stop affecting account balances.")
+            Text("This is a soft deletion. The transaction remains recoverable in storage, but stops affecting balances, budgets, and reports.")
         }
         .overlay(alignment: .bottom) {
             if model.isSavingResource {
@@ -265,38 +175,531 @@ struct WorkspaceSetupView: View {
             Text(model.resourceErrorMessage ?? "The request could not be completed.")
         }
     }
+
+    @ViewBuilder
+    private func workspaceContent<Content: View>(
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        if hasLoadedWorkspace {
+            content()
+        } else {
+            ProgressView("Loading \(workspace.name)…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private func tabLabel(_ tab: WorkspaceTab) -> some View {
+        Label(
+            tab.title,
+            systemImage: selectedTab == tab ? tab.selectedSystemImage : tab.systemImage
+        )
+    }
+
+    private var selectedTab: WorkspaceTab {
+        WorkspaceTab.restored(from: selectedTabRawValue)
+    }
+
+    private var selectedTabSelection: Binding<WorkspaceTab> {
+        Binding(
+            get: { selectedTab },
+            set: { selectedTabRawValue = $0.rawValue }
+        )
+    }
+
+    private func selectTab(_ tab: WorkspaceTab) {
+        selectedTabRawValue = tab.rawValue
+    }
+
+    private var transactionsView: some View {
+        List {
+            if model.transactions.isEmpty {
+                ContentUnavailableView(
+                    "No transactions",
+                    systemImage: "list.bullet.rectangle",
+                    description: Text("Record an expense, income, transfer, or adjustment.")
+                )
+            } else if filteredTransactions.isEmpty {
+                ContentUnavailableView(
+                    "No matching transactions",
+                    systemImage: "line.3.horizontal.decrease.circle",
+                    description: Text("Try a different search or clear the current filters.")
+                )
+                Button("Clear search and filters") { clearTransactionFilters() }
+            }
+            ForEach(filteredTransactions) { transaction in
+                transactionListRow(transaction)
+            }
+            viewerNotice
+        }
+        .navigationTitle("Transactions")
+        .searchable(
+            text: $transactionSearchText,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: "Payee, account, category, or note"
+        )
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                Menu {
+                    Picker("Status", selection: $transactionStatusScope) {
+                        ForEach(TransactionStatusScope.allCases) { scope in
+                            Text(scope.title).tag(scope)
+                        }
+                    }
+                    Picker("Kind", selection: $transactionKindScope) {
+                        ForEach(TransactionKindScope.allCases) { scope in
+                            Text(scope.title).tag(scope)
+                        }
+                    }
+                    if transactionFilter.isActive {
+                        Divider()
+                        Button("Clear filters", systemImage: "xmark.circle") {
+                            clearTransactionFilters()
+                        }
+                    }
+                } label: {
+                    Label(
+                        "Filter transactions",
+                        systemImage: transactionFilter.isActive
+                            ? "line.3.horizontal.decrease.circle.fill"
+                            : "line.3.horizontal.decrease.circle"
+                    )
+                }
+                if canManage {
+                    Button("Add transaction", systemImage: "plus") {
+                        editingTransaction = nil
+                        transactionEditorPresented = true
+                    }
+                }
+            }
+        }
+        .refreshable { await model.loadResources(workspaceID: workspace.id) }
+    }
+
+    private var transactionFilter: TransactionListFilter {
+        TransactionListFilter(
+            searchText: transactionSearchText,
+            status: transactionStatusScope,
+            kind: transactionKindScope
+        )
+    }
+
+    private var filteredTransactions: [BudgetTransaction] {
+        let accountNames = Dictionary(uniqueKeysWithValues: model.accounts.map { ($0.id, $0.name) })
+        let categoryNames = Dictionary(uniqueKeysWithValues: model.categories.map { ($0.id, $0.name) })
+        return model.transactions.filter {
+            transactionFilter.matches(
+                $0,
+                accountNames: accountNames,
+                categoryNames: categoryNames
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func transactionListRow(_ transaction: BudgetTransaction) -> some View {
+        if canManage {
+            Button {
+                editingTransaction = transaction
+                transactionEditorPresented = true
+            } label: {
+                TransactionRow(
+                    transaction: transaction,
+                    workspace: workspace,
+                    accounts: model.accounts
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Opens the transaction editor")
+            .swipeActions {
+                Button("Delete", role: .destructive) {
+                    deleteTransactionTarget = transaction
+                }
+            }
+        } else {
+            TransactionRow(
+                transaction: transaction,
+                workspace: workspace,
+                accounts: model.accounts
+            )
+        }
+    }
+
+    private func clearTransactionFilters() {
+        transactionSearchText = ""
+        transactionStatusScope = .all
+        transactionKindScope = .all
+    }
+
+    private var accountsView: some View {
+        List {
+            if model.accounts.isEmpty {
+                ContentUnavailableView(
+                    "No accounts",
+                    systemImage: "building.columns",
+                    description: Text("Create an account to begin tracking money.")
+                )
+            }
+            Section("Base-currency position") {
+                BaseCurrencyTotalView(
+                    workspace: workspace,
+                    accounts: model.accounts,
+                    rates: model.exchangeRates
+                )
+            }
+            if !currencySummaries.isEmpty {
+                Section("Native-currency totals") {
+                    ForEach(currencySummaries) { summary in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(summary.currency.title)
+                                    .font(.headline)
+                                Text("\(summary.accountCount) active account\(summary.accountCount == 1 ? "" : "s")")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer(minLength: 12)
+                            Text(
+                                summary.balanceMinor.map {
+                                    summary.currency.formatted(minorUnits: $0)
+                                } ?? "Total unavailable"
+                            )
+                            .font(.subheadline.monospacedDigit().weight(.semibold))
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
+                }
+            }
+            if !activeAccounts.isEmpty {
+                Section {
+                    ForEach(activeAccounts) { account in
+                        accountListRow(account)
+                    }
+                } header: {
+                    Text("Active accounts")
+                } footer: {
+                    Text("Account currency locks after financial history exists. Archive keeps every historical entry and balance intact.")
+                }
+            }
+            if !archivedAccounts.isEmpty {
+                Section("Archived accounts") {
+                    ForEach(archivedAccounts) { account in
+                        AccountRow(account: account)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            viewerNotice
+        }
+        .navigationTitle("Accounts")
+        .toolbar {
+            if canManage {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Add account", systemImage: "plus") {
+                        editingAccount = nil
+                        accountEditorPresented = true
+                    }
+                }
+            }
+        }
+        .refreshable { await model.loadResources(workspaceID: workspace.id) }
+    }
+
+    private var activeAccounts: [BudgetAccount] {
+        model.accounts.filter { $0.archivedAt == nil }
+    }
+
+    private var archivedAccounts: [BudgetAccount] {
+        model.accounts.filter { $0.archivedAt != nil }
+    }
+
+    private var currencySummaries: [AccountCurrencySummary] {
+        accountCurrencySummaries(model.accounts)
+    }
+
+    @ViewBuilder
+    private func accountListRow(_ account: BudgetAccount) -> some View {
+        if canManage {
+            Button {
+                editingAccount = account
+                accountEditorPresented = true
+            } label: {
+                AccountRow(account: account)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Opens the account editor")
+            .swipeActions {
+                Button("Archive", role: .destructive) {
+                    archiveTarget = .account(account)
+                }
+            }
+            .contextMenu {
+                Button("Archive account", systemImage: "archivebox", role: .destructive) {
+                    archiveTarget = .account(account)
+                }
+            }
+        } else {
+            AccountRow(account: account)
+        }
+    }
+
+    private var moreView: some View {
+        List {
+            Section("Workspace") {
+                Menu {
+                    ForEach(session.workspaces) { candidate in
+                        Button {
+                            onSelectWorkspace(candidate.id)
+                        } label: {
+                            if candidate.id == workspace.id {
+                                Label(candidate.name, systemImage: "checkmark")
+                            } else {
+                                Text(candidate.name)
+                            }
+                        }
+                    }
+                } label: {
+                    LabeledContent("Current workspace", value: workspace.name)
+                }
+                LabeledContent("Base currency", value: workspace.baseCurrency.rawValue)
+                LabeledContent("Timezone", value: workspace.timezone)
+                LabeledContent("Your role", value: workspace.role.capitalized)
+            }
+
+            Section("Explore and organize") {
+                NavigationLink {
+                    FinancialReportsView(workspace: workspace, model: model)
+                } label: {
+                    Label("Reports", systemImage: "chart.bar.xaxis")
+                }
+                NavigationLink {
+                    categoriesView
+                } label: {
+                    LabeledContent {
+                        Text("\(model.categories.count)")
+                            .foregroundStyle(.secondary)
+                    } label: {
+                        Label("Categories", systemImage: "tag")
+                    }
+                }
+                NavigationLink {
+                    WorkspaceCollaborationView(
+                        workspace: workspace,
+                        currentUserID: session.user.id,
+                        model: model
+                    )
+                } label: {
+                    Label("Members and invitations", systemImage: "person.2")
+                }
+            }
+
+            Section("Join another workspace") {
+                Button("Accept invitation", systemImage: "envelope.open") {
+                    model.resourceErrorMessage = nil
+                    invitationAcceptancePresented = true
+                }
+            }
+
+            Section("Account") {
+                LabeledContent("Signed in as", value: session.user.displayName)
+                Text(session.user.email)
+                    .foregroundStyle(.secondary)
+                LabeledContent("Server", value: model.serverAddress)
+                Button("Sign out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) {
+                    Task { await model.logout() }
+                }
+                .disabled(model.isSubmitting)
+            }
+            viewerNotice
+        }
+        .navigationTitle("More")
+        .toolbar {
+            if canManage {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Add category", systemImage: "plus") {
+                        editingCategory = nil
+                        categoryEditorPresented = true
+                    }
+                }
+            }
+        }
+        .refreshable { await model.loadResources(workspaceID: workspace.id) }
+    }
+
+    private var categoriesView: some View {
+        List {
+            if model.categories.isEmpty {
+                ContentUnavailableView(
+                    "No categories",
+                    systemImage: "tag",
+                    description: Text("Create categories to organize reporting and monthly plans.")
+                )
+            }
+            ForEach(BudgetCategoryKind.allCases) { kind in
+                let rows = categoryTree(model.categories).filter { $0.category.kind == kind }
+                if !rows.isEmpty {
+                    Section {
+                        ForEach(rows) { row in
+                            categoryListRow(row)
+                        }
+                    } header: {
+                        Text(kind.title)
+                    } footer: {
+                        if kind == .expense {
+                            Text("Refunds may appear as positive allocations in expense categories. Protected Uncategorized categories cannot be archived.")
+                        }
+                    }
+                }
+            }
+            viewerNotice
+        }
+        .navigationTitle("Categories")
+        .toolbar {
+            if canManage {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Add category", systemImage: "plus") {
+                        editingCategory = nil
+                        categoryEditorPresented = true
+                    }
+                }
+            }
+        }
+        .refreshable { await model.loadResources(workspaceID: workspace.id) }
+    }
+
+    @ViewBuilder
+    private func categoryListRow(_ row: CategoryTreeRow) -> some View {
+        let category = row.category
+        if canManage && !category.isSystem {
+            Button {
+                editingCategory = category
+                categoryEditorPresented = true
+            } label: {
+                CategoryRow(category: category, depth: row.depth)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Opens the category editor")
+            .swipeActions {
+                Button("Archive", role: .destructive) {
+                    archiveTarget = .category(category)
+                }
+            }
+            .contextMenu {
+                Button("Archive category", systemImage: "archivebox", role: .destructive) {
+                    archiveTarget = .category(category)
+                }
+            }
+        } else {
+            CategoryRow(category: category, depth: row.depth)
+        }
+    }
+
+    @ViewBuilder
+    private var viewerNotice: some View {
+        if !canManage {
+            Section {
+                Label("Viewer access is read-only.", systemImage: "eye")
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
 }
 
-private struct TransactionRow: View {
+struct TransactionRow: View {
     let transaction: BudgetTransaction
     let workspace: BudgetWorkspace
     let accounts: [BudgetAccount]
 
     var body: some View {
-        HStack {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .center, spacing: 12) {
+                identity
+                Spacer(minLength: 12)
+                amount
+            }
+            VStack(alignment: .leading, spacing: 10) {
+                identity
+                amount
+            }
+        }
+        .padding(.vertical, 3)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilitySummary)
+    }
+
+    private var identity: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: kindIcon)
+                .font(.headline)
+                .foregroundStyle(kindColor)
+                .frame(width: 36, height: 36)
+                .background(kindColor.opacity(0.12), in: Circle())
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(transaction.payee ?? transaction.description ?? transaction.kind.title)
                     .font(.headline)
-                Text(
-                    "\(transaction.transactionDate) · \(transaction.kind.title) · \(transaction.status.title)"
-                )
+                HStack(spacing: 6) {
+                    Text(transaction.transactionDate)
+                    Text("·")
+                    Text(transaction.kind.title)
+                    if transaction.status == .pending {
+                        Text("Pending")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.orange)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(.orange.opacity(0.12), in: Capsule())
+                    }
+                }
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 Text(accountNames)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Spacer()
+        }
+    }
+
+    @ViewBuilder
+    private var amount: some View {
+        Group {
             if transaction.kind == .transfer {
                 Text("Transfer")
-                    .font(.subheadline)
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.secondary)
             } else if let total {
                 Text(workspace.baseCurrency.formatted(minorUnits: total))
-                    .font(.subheadline.monospacedDigit())
+                    .font(.subheadline.monospacedDigit().weight(.semibold))
+                    .foregroundStyle(total > 0 ? Color.green : Color.primary)
+                    .minimumScaleFactor(0.75)
+                    .lineLimit(1)
             }
         }
-        .contentShape(Rectangle())
+    }
+
+    private var kindIcon: String {
+        switch transaction.kind {
+        case .standard: total ?? 0 >= 0 ? "arrow.down.left" : "arrow.up.right"
+        case .transfer: "arrow.left.arrow.right"
+        case .adjustment: "plus.forwardslash.minus"
+        }
+    }
+
+    private var kindColor: Color {
+        switch transaction.kind {
+        case .standard: total ?? 0 >= 0 ? .green : .orange
+        case .transfer: .blue
+        case .adjustment: .purple
+        }
+    }
+
+    private var accessibilitySummary: String {
+        let title = transaction.payee ?? transaction.description ?? transaction.kind.title
+        let amount = transaction.kind == .transfer
+            ? "transfer"
+            : total.map { workspace.baseCurrency.formatted(minorUnits: $0) } ?? "amount unavailable"
+        return "\(title), \(transaction.transactionDate), \(transaction.kind.title), "
+            + "\(transaction.status.title), \(amount), \(accountNames)"
     }
 
     private var accountNames: String {
@@ -336,9 +739,14 @@ private struct BaseCurrencyTotalView: View {
 
     var body: some View {
         if let total {
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Posted across active \(workspace.baseCurrency.rawValue) accounts")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Text(workspace.baseCurrency.formatted(minorUnits: total))
-                    .font(.headline.monospacedDigit())
+                    .font(.title2.monospacedDigit().weight(.semibold))
+                    .minimumScaleFactor(0.7)
+                    .lineLimit(1)
                 if let selectedRate,
                    let converted = selectedRate.convert(minorUnits: total) {
                     Text(
@@ -362,6 +770,14 @@ private struct BaseCurrencyTotalView: View {
                     }
                 }
             }
+            .padding(.vertical, 5)
+            .accessibilityElement(children: .contain)
+        } else {
+            Label(
+                "No active accounts use \(workspace.baseCurrency.rawValue)",
+                systemImage: "building.columns"
+            )
+            .foregroundStyle(.secondary)
         }
     }
 
@@ -392,7 +808,30 @@ private struct AccountRow: View {
     let account: BudgetAccount
 
     var body: some View {
-        HStack {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                identity
+                Spacer(minLength: 12)
+                balance
+            }
+            VStack(alignment: .leading, spacing: 10) {
+                identity
+                balance
+            }
+        }
+        .padding(.vertical, 3)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+
+    private var identity: some View {
+        HStack(spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.headline)
+                .foregroundStyle(.blue)
+                .frame(width: 36, height: 36)
+                .background(.blue.opacity(0.1), in: Circle())
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 4) {
                 Text(account.name)
                     .font(.headline)
@@ -401,12 +840,31 @@ private struct AccountRow: View {
                     .joined(separator: " · "))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if account.archivedAt != nil {
+                    Label("Archived", systemImage: "archivebox.fill")
+                        .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                }
             }
-            Spacer()
-            Text(account.currency.formatted(minorUnits: account.balanceMinor))
-                .font(.subheadline.monospacedDigit())
         }
-        .contentShape(Rectangle())
+    }
+
+    private var balance: some View {
+        Text(account.currency.formatted(minorUnits: account.balanceMinor))
+            .font(.subheadline.monospacedDigit().weight(.semibold))
+            .minimumScaleFactor(0.75)
+            .lineLimit(1)
+    }
+
+    private var systemImage: String {
+        switch account.type {
+        case .bank: "building.columns"
+        case .cash: "banknote"
+        case .creditCard: "creditcard"
+        case .savings: "building.columns.fill"
+        case .investment: "chart.line.uptrend.xyaxis"
+        case .other: "wallet.bifold"
+        }
     }
 }
 
@@ -459,7 +917,7 @@ private struct AccountEditorView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Account") {
+                Section {
                     TextField("Name", text: $name)
                     Picker("Type", selection: $type) {
                         ForEach(BudgetAccountType.allCases) { type in
@@ -472,9 +930,14 @@ private struct AccountEditorView: View {
                         }
                     }
                     TextField("Institution (optional)", text: $institutionName)
+                } header: {
+                    Text("Account")
+                } footer: {
+                    Text("Currency cannot change after the account has financial history. Archiving preserves every entry and derived balance.")
                 }
                 ResourceErrorSection(message: model.resourceErrorMessage)
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle(account == nil ? "Add account" : "Edit account")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -622,6 +1085,15 @@ private enum ArchiveTarget: Identifiable {
         switch self {
         case let .account(account): "Archive \(account.name)?"
         case let .category(category): "Archive \(category.name)?"
+        }
+    }
+
+    var confirmationMessage: String {
+        switch self {
+        case .account:
+            "The account leaves active setup but its entries and derived balance remain in financial history."
+        case .category:
+            "The category leaves active organization but historical allocations remain in reports. Categories with active children must be reorganized first."
         }
     }
 }

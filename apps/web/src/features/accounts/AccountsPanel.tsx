@@ -16,7 +16,17 @@ import {
   updateAccount,
 } from "../../api/client";
 import { MutationError } from "../../components/MutationError";
-import { ResourceState } from "../../components/ResourceState";
+import { AppIcon } from "../../components/ExperiencePrimitives";
+import {
+  EmptyState,
+  InlineNotice,
+  LoadingState,
+  ModalDialog,
+  MoneyAmount,
+  StatusBadge,
+  ToastRegion,
+  type ToastMessage,
+} from "../../components/Presentation";
 import {
   type Currency,
   SUPPORTED_CURRENCIES,
@@ -43,12 +53,20 @@ export function AccountsPanel({ workspace, canManage }: { workspace: Workspace; 
   const [type, setType] = useState<AccountWriteRequest["type"]>("bank");
   const [currency, setCurrency] = useState<Currency>(workspace.base_currency);
   const [institutionName, setInstitutionName] = useState("");
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [archiving, setArchiving] = useState<Account>();
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const save = useMutation({
     mutationFn: (input: AccountWriteRequest) =>
       editing
         ? updateAccount(workspace.id, editing.id, input)
         : createAccount(workspace.id, input),
-    onSuccess: async () => {
+    onSuccess: async (account) => {
+      setToasts([{
+        id: `account-${account.id}-saved`,
+        title: editing ? "Account updated" : "Account created",
+        tone: "positive",
+      }]);
       reset();
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: accountsQueryKey(workspace.id) }),
@@ -58,10 +76,19 @@ export function AccountsPanel({ workspace, canManage }: { workspace: Workspace; 
   });
   const archive = useMutation({
     mutationFn: (accountId: string) => archiveAccount(workspace.id, accountId),
-    onSuccess: () => Promise.all([
-      queryClient.invalidateQueries({ queryKey: accountsQueryKey(workspace.id) }),
-      queryClient.invalidateQueries({ queryKey: financialProjectionQueryPrefix(workspace.id) }),
-    ]),
+    onSuccess: async () => {
+      setToasts([{
+        id: `account-archive-${archiving?.id ?? "complete"}`,
+        title: "Account archived",
+        description: "Its historical entries remain part of the ledger.",
+        tone: "positive",
+      }]);
+      setArchiving(undefined);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: accountsQueryKey(workspace.id) }),
+        queryClient.invalidateQueries({ queryKey: financialProjectionQueryPrefix(workspace.id) }),
+      ]);
+    },
   });
 
   function reset() {
@@ -70,6 +97,8 @@ export function AccountsPanel({ workspace, canManage }: { workspace: Workspace; 
     setType("bank");
     setCurrency(workspace.base_currency);
     setInstitutionName("");
+    setEditorOpen(false);
+    save.reset();
   }
 
   function edit(account: Account) {
@@ -78,6 +107,12 @@ export function AccountsPanel({ workspace, canManage }: { workspace: Workspace; 
     setType(account.type);
     setCurrency(account.currency);
     setInstitutionName(account.institution_name ?? "");
+    setEditorOpen(true);
+  }
+
+  function create() {
+    reset();
+    setEditorOpen(true);
   }
 
   function submit(event: FormEvent) {
@@ -90,59 +125,87 @@ export function AccountsPanel({ workspace, canManage }: { workspace: Workspace; 
     });
   }
 
+  function confirmArchive(account: Account) {
+    archive.reset();
+    setArchiving(account);
+  }
+
+  const accounts = query.data ?? [];
+  const activeAccounts = accounts.filter((account) => !account.archived_at);
+  const archivedAccounts = accounts.filter((account) => account.archived_at);
+
   return (
-    <section className="setup-panel" aria-labelledby="accounts-heading">
-      <div className="section-heading">
+    <section className="accounts-workspace" aria-labelledby="accounts-heading">
+      <div className="resource-destination-heading">
         <div>
           <p className="eyebrow">Where money lives</p>
           <h2 id="accounts-heading">Accounts</h2>
+          <p>Balances come from posted entries; pending activity is reflected in projections.</p>
         </div>
-        <span>{query.data?.length ?? 0} active</span>
+        {canManage ? <button onClick={create} type="button">Add account</button> : null}
       </div>
-      <ResourceState query={query} empty="Create your first account to begin." />
+      {query.isPending ? <LoadingState label="Loading accounts" rows={4} /> : null}
+      {query.isError ? (
+        <InlineNotice
+          action={<button className="secondary-button" onClick={() => void query.refetch()} type="button">Try again</button>}
+          title="Accounts could not be loaded"
+          tone="danger"
+        >
+          <p>{query.error.message}</p>
+        </InlineNotice>
+      ) : null}
       <BaseCurrencyTotal
-        accounts={query.data ?? []}
+        accounts={accounts}
         baseCurrency={workspace.base_currency}
         displayCurrency={displayCurrency}
         onDisplayCurrencyChange={setDisplayCurrency}
         rates={rates.data ?? []}
       />
-      <div className="resource-list">
-        {query.data?.map((account) => (
-          <article className="resource-row" key={account.id}>
-            <div>
-              <strong>{account.name}</strong>
-              <small>
-                {account.type.replaceAll("_", " ")} · {account.currency}
-                {account.institution_name ? ` · ${account.institution_name}` : ""}
-              </small>
-            </div>
-            <div className="resource-actions">
-              <span>{formatMoney(account.balance_minor, account.currency)}</span>
-              {canManage ? (
-                <>
-                  <button className="text-button" type="button" onClick={() => edit(account)}>
-                    Edit
-                  </button>
-                  <button
-                    className="text-button danger"
-                    type="button"
-                    onClick={() => {
-                      if (window.confirm(`Archive ${account.name}?`)) archive.mutate(account.id);
-                    }}
-                  >
-                    Archive
-                  </button>
-                </>
-              ) : null}
-            </div>
-          </article>
-        ))}
-      </div>
-      <MutationError mutation={archive} />
+      {!query.isPending && !query.isError && activeAccounts.length === 0 ? (
+        <EmptyState
+          action={canManage ? <button onClick={create} type="button">Create first account</button> : undefined}
+          description="Accounts are required before transactions can affect a balance."
+          icon="accounts"
+          title="No active accounts"
+        />
+      ) : null}
+      {activeAccounts.length > 0 ? (
+        <div className="account-card-grid">
+          {activeAccounts.map((account) => (
+            <AccountCard account={account} canManage={canManage} key={account.id} onArchive={confirmArchive} onEdit={edit} />
+          ))}
+        </div>
+      ) : null}
+      {archivedAccounts.length > 0 ? (
+        <details className="archived-resource-group">
+          <summary>{archivedAccounts.length} archived account{archivedAccounts.length === 1 ? "" : "s"}</summary>
+          <div className="account-card-grid account-card-grid-archived">
+            {archivedAccounts.map((account) => (
+              <AccountCard account={account} canManage={false} key={account.id} onArchive={confirmArchive} onEdit={edit} />
+            ))}
+          </div>
+        </details>
+      ) : null}
+      {!canManage && !query.isPending ? (
+        <InlineNotice title="Read-only accounts"><p>Viewer access can review balances but cannot change account settings.</p></InlineNotice>
+      ) : null}
       {canManage ? (
-        <form className="resource-form" onSubmit={submit}>
-          <h3>{editing ? `Edit ${editing.name}` : "Add account"}</h3>
+        <ModalDialog
+          description="Account currency is locked after ledger history exists. Balances are always derived from entries."
+          footer={(
+            <>
+              <button className="secondary-button" onClick={reset} type="button">Cancel</button>
+              <button disabled={save.isPending} form="account-editor" type="submit">
+                {save.isPending ? "Saving…" : editing ? "Save account" : "Add account"}
+              </button>
+            </>
+          )}
+          onClose={reset}
+          open={editorOpen}
+          placement="drawer"
+          title={editing ? `Edit ${editing.name}` : "Add account"}
+        >
+          <form className="resource-form resource-editor-form" id="account-editor" onSubmit={submit}>
           <label>
             Name
             <input required maxLength={100} value={name} onChange={(event) => setName(event.target.value)} />
@@ -179,21 +242,68 @@ export function AccountsPanel({ workspace, canManage }: { workspace: Workspace; 
             <input maxLength={100} value={institutionName} onChange={(event) => setInstitutionName(event.target.value)} />
           </label>
           <MutationError mutation={save} />
-          <div className="form-actions">
-            <button disabled={save.isPending} type="submit">
-              {editing ? "Save account" : "Add account"}
+          </form>
+        </ModalDialog>
+      ) : null}
+      <ModalDialog
+        description="Archiving removes this account from active workflows while preserving every historical entry and report."
+        footer={(
+          <>
+            <button className="secondary-button" onClick={() => setArchiving(undefined)} type="button">Cancel</button>
+            <button
+              className="danger-button"
+              disabled={archive.isPending}
+              onClick={() => archiving && archive.mutate(archiving.id)}
+              type="button"
+            >
+              {archive.isPending ? "Archiving…" : "Archive account"}
             </button>
-            {editing ? (
-              <button className="secondary-button" type="button" onClick={reset}>
-                Cancel
-              </button>
-            ) : null}
-          </div>
-        </form>
-      ) : (
-        <p className="permission-note">Viewer access is read-only.</p>
-      )}
+          </>
+        )}
+        onClose={() => setArchiving(undefined)}
+        open={Boolean(archiving)}
+        title={`Archive ${archiving?.name ?? "account"}?`}
+      >
+        <InlineNotice title="Historical balances stay intact" tone="warning">
+          <p>You can no longer select the archived account for new transactions.</p>
+        </InlineNotice>
+        <MutationError mutation={archive} />
+      </ModalDialog>
+      <ToastRegion messages={toasts} onDismiss={(id) => setToasts((current) => current.filter((toast) => toast.id !== id))} />
     </section>
+  );
+}
+
+function AccountCard({ account, canManage, onArchive, onEdit }: {
+  account: Account;
+  canManage: boolean;
+  onArchive: (account: Account) => void;
+  onEdit: (account: Account) => void;
+}) {
+  return (
+    <article className={`account-card${account.archived_at ? " account-card-archived" : ""}`}>
+      <div className="account-card-heading">
+        <span aria-hidden="true" className="resource-icon"><AppIcon name="accounts" size={18} /></span>
+        <div>
+          <strong>{account.name}</strong>
+          <small>{account.institution_name || account.type.replaceAll("_", " ")}</small>
+        </div>
+        <StatusBadge>{account.currency}</StatusBadge>
+      </div>
+      <div className="account-card-balance">
+        <span>{account.archived_at ? "Historical balance" : "Posted balance"}</span>
+        <strong><MoneyAmount amount={account.balance_minor} currency={account.currency} emphasis="hero" /></strong>
+      </div>
+      <div className="account-card-footer">
+        <span>{account.type.replaceAll("_", " ")}</span>
+        {canManage ? (
+          <div>
+            <button className="text-button" onClick={() => onEdit(account)} type="button">Edit</button>
+            <button className="text-button danger" onClick={() => onArchive(account)} type="button">Archive</button>
+          </div>
+        ) : null}
+      </div>
+    </article>
   );
 }
 
@@ -226,6 +336,7 @@ function BaseCurrencyTotal({
   return (
     <div className="currency-total">
       <div>
+        <span>Base-currency total</span>
         <strong>{formatMoney(total, baseCurrency)}</strong>
         {converted !== null && selected ? (
           <small>

@@ -103,6 +103,9 @@ final class AppModel: ObservableObject {
         transactions = []
         financialProjection = nil
         monthlyBudget = nil
+        members = []
+        invitations = []
+        issuedInvitation = nil
         activeResourceWorkspaceID = nil
         activeProjectionRange = nil
         activeBudgetMonth = nil
@@ -125,6 +128,9 @@ final class AppModel: ObservableObject {
             transactions = []
             financialProjection = nil
             monthlyBudget = nil
+            members = []
+            invitations = []
+            issuedInvitation = nil
             activeProjectionRange = nil
             activeBudgetMonth = nil
             budgetErrorMessage = nil
@@ -511,6 +517,10 @@ final class AppModel: ObservableObject {
             issuedInvitation = issued
             invitations.append(issued.invitation)
         }
+    }
+
+    func acknowledgeIssuedInvitation() {
+        issuedInvitation = nil
     }
 
     func revokeInvitation(workspaceID: String, invitationID: String) async {

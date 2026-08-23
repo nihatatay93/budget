@@ -1,6 +1,290 @@
 import SwiftUI
 
-struct FinancialDashboardView: View {
+struct WorkspaceOverviewView: View {
+    let workspace: BudgetWorkspace
+    @ObservedObject var model: AppModel
+    let onAddTransaction: () -> Void
+    let onOpenTransactions: () -> Void
+    let onOpenBudget: () -> Void
+
+    private var currentBudgetMonth: String {
+        workspaceMonthKey(timezone: workspace.timezone)
+    }
+
+    var body: some View {
+        List {
+            if let projection = model.financialProjection {
+                Section {
+                    OverviewBalanceCard(projection: projection)
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                }
+
+                Section("This period") {
+                    OverviewActivityComparison(projection: projection)
+                }
+
+                Section {
+                    Button(action: onOpenBudget) {
+                        if let budget = model.monthlyBudget,
+                           budget.month == currentBudgetMonth {
+                            DashboardBudgetProgress(plan: budget)
+                        } else if model.isLoadingBudget {
+                            ProgressView("Loading current budget…")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        } else {
+                            Label("No plan for this month", systemImage: "chart.pie")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                } header: {
+                    HStack {
+                        Text("Monthly plan")
+                        Spacer()
+                        Text("Open Budget")
+                            .font(.caption)
+                            .foregroundStyle(.tint)
+                            .textCase(nil)
+                    }
+                }
+
+                Section("Recent activity") {
+                    if recentTransactions.isEmpty {
+                        ContentUnavailableView(
+                            "No transactions yet",
+                            systemImage: "list.bullet.rectangle",
+                            description: Text("Add the first entry to begin building your ledger.")
+                        )
+                    }
+                    ForEach(recentTransactions) { transaction in
+                        TransactionRow(
+                            transaction: transaction,
+                            workspace: workspace,
+                            accounts: model.accounts
+                        )
+                    }
+                    Button("Review all transactions", systemImage: "arrow.right") {
+                        onOpenTransactions()
+                    }
+                }
+            } else if let message = model.resourceErrorMessage {
+                Section {
+                    ContentUnavailableView(
+                        "Overview unavailable",
+                        systemImage: "exclamationmark.triangle",
+                        description: Text(message)
+                    )
+                    Button("Try again") { reload() }
+                }
+            } else {
+                Section {
+                    ProgressView("Loading overview…")
+                        .frame(maxWidth: .infinity)
+                }
+            }
+        }
+        .navigationTitle("Overview")
+        .toolbar {
+            if workspace.canManage {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Add transaction", systemImage: "plus") {
+                        onAddTransaction()
+                    }
+                }
+            }
+        }
+        .task(id: workspace.id) {
+            await model.loadMonthlyBudget(
+                workspaceID: workspace.id,
+                month: currentBudgetMonth
+            )
+        }
+        .refreshable { await refresh() }
+    }
+
+    private var recentTransactions: [BudgetTransaction] {
+        Array(model.transactions.prefix(5))
+    }
+
+    private func reload() {
+        Task { await refresh() }
+    }
+
+    private func refresh() async {
+        await model.loadResources(workspaceID: workspace.id)
+        await model.loadMonthlyBudget(
+            workspaceID: workspace.id,
+            month: currentBudgetMonth
+        )
+    }
+}
+
+private struct OverviewBalanceCard: View {
+    let projection: BudgetFinancialProjection
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Posted balance")
+                        .font(.subheadline.weight(.semibold))
+                    Text(
+                        "\(displayDate(projection.period.fromDate))–"
+                        + displayDate(projection.period.toDate)
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text(projection.period.baseCurrency.rawValue)
+                    .font(.caption.weight(.bold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(.thinMaterial, in: Capsule())
+            }
+            Text(projection.period.baseCurrency.formatted(
+                minorUnits: projection.summary.balanceBaseMinor.posted
+            ))
+            .font(.largeTitle.monospacedDigit().weight(.semibold))
+            .minimumScaleFactor(0.6)
+            .lineLimit(1)
+            Divider()
+            LabeledContent(
+                "Pending delta",
+                value: signedMoney(
+                    projection.summary.balanceBaseMinor.pending,
+                    currency: projection.period.baseCurrency
+                )
+            )
+            LabeledContent(
+                "Projected",
+                value: projection.period.baseCurrency.formatted(
+                    minorUnits: projection.summary.balanceBaseMinor.projected
+                )
+            )
+        }
+        .padding(20)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            "Posted balance "
+            + projection.period.baseCurrency.formatted(
+                minorUnits: projection.summary.balanceBaseMinor.posted
+            )
+            + ", pending delta "
+            + projection.period.baseCurrency.formatted(
+                minorUnits: projection.summary.balanceBaseMinor.pending
+            )
+            + ", projected "
+            + projection.period.baseCurrency.formatted(
+                minorUnits: projection.summary.balanceBaseMinor.projected
+            )
+        )
+    }
+}
+
+private struct OverviewActivityComparison: View {
+    let projection: BudgetFinancialProjection
+
+    private var comparison: FinancialActivityComparison {
+        FinancialActivityComparison(
+            income: projection.summary.incomeBaseMinor.posted,
+            spending: projection.summary.spendingBaseMinor.posted
+        )
+    }
+
+    var body: some View {
+        VStack(spacing: 16) {
+            OverviewActivityLine(
+                title: "Income",
+                systemImage: "arrow.down.left.circle.fill",
+                color: .green,
+                amount: projection.summary.incomeBaseMinor.posted,
+                pending: projection.summary.incomeBaseMinor.pending,
+                progress: comparison.incomeProgress,
+                currency: projection.period.baseCurrency
+            )
+            OverviewActivityLine(
+                title: "Spending",
+                systemImage: "arrow.up.right.circle.fill",
+                color: .orange,
+                amount: projection.summary.spendingBaseMinor.posted,
+                pending: projection.summary.spendingBaseMinor.pending,
+                progress: comparison.spendingProgress,
+                currency: projection.period.baseCurrency
+            )
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+private struct OverviewActivityLine: View {
+    let title: String
+    let systemImage: String
+    let color: Color
+    let amount: Int64
+    let pending: Int64
+    let progress: Double
+    let currency: BudgetCurrency
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline) {
+                    activityLabel
+                    Spacer(minLength: 12)
+                    amountLabel
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    activityLabel
+                    amountLabel
+                }
+            }
+            ProgressView(value: progress)
+                .tint(color)
+                .accessibilityLabel("\(title) relative amount")
+                .accessibilityValue(currency.formatted(minorUnits: amount))
+            Text(
+                pending == 0
+                    ? "No pending activity"
+                    : "\(signedMoney(pending, currency: currency)) pending"
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private var activityLabel: some View {
+        Label(title, systemImage: systemImage)
+            .font(.headline)
+            .foregroundStyle(color)
+    }
+
+    private var amountLabel: some View {
+        Text(currency.formatted(minorUnits: amount))
+            .font(.headline.monospacedDigit())
+    }
+}
+
+struct FinancialActivityComparison: Equatable {
+    let incomeProgress: Double
+    let spendingProgress: Double
+
+    init(income: Int64, spending: Int64) {
+        let maximum = max(income.magnitude, spending.magnitude)
+        guard maximum > 0 else {
+            incomeProgress = 0
+            spendingProgress = 0
+            return
+        }
+        incomeProgress = Double(income.magnitude) / Double(maximum)
+        spendingProgress = Double(spending.magnitude) / Double(maximum)
+    }
+}
+
+struct FinancialReportsView: View {
     let workspace: BudgetWorkspace
     @ObservedObject var model: AppModel
 
@@ -120,13 +404,13 @@ struct FinancialDashboardView: View {
                 )
             } else if !model.isLoadingResources && !model.isLoadingProjection {
                 ContentUnavailableView(
-                    "Overview unavailable",
+                    "Reports unavailable",
                     systemImage: "chart.bar.xaxis",
-                    description: Text("Pull to refresh and try again.")
+                    description: Text(model.resourceErrorMessage ?? "Pull to refresh and try again.")
                 )
             }
         }
-        .navigationTitle("Financial overview")
+        .navigationTitle("Reports")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: workspace.id) {
             usesCustomRange = false
@@ -143,7 +427,7 @@ struct FinancialDashboardView: View {
         }
         .overlay {
             if model.isLoadingProjection {
-                ProgressView("Updating overview…")
+                ProgressView("Updating reports…")
                     .padding()
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
             }

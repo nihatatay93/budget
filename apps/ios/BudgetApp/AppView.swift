@@ -106,6 +106,7 @@ private struct AuthenticationView: View {
                     .disabled(model.isSubmitting || !formIsValid)
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Budget")
         }
     }
@@ -123,43 +124,58 @@ private struct AuthenticationView: View {
 private struct WorkspaceView: View {
     let session: UserSession
     @ObservedObject var model: AppModel
+    @SceneStorage("selectedWorkspaceID") private var selectedWorkspaceID: String?
 
     var body: some View {
-        NavigationStack {
-            List(session.workspaces) { workspace in
-                NavigationLink {
-                    WorkspaceSetupView(
-                        workspace: workspace,
-                        currentUserID: session.user.id,
-                        model: model
-                    )
-                } label: {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(workspace.name)
-                            .font(.headline)
-                        Text("\(workspace.baseCurrency.rawValue) · \(workspace.timezone)")
-                            .foregroundStyle(.secondary)
-                        Text(workspace.role.uppercased())
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.green)
+        Group {
+            if let selectedWorkspace {
+                WorkspaceSetupView(
+                    workspace: selectedWorkspace,
+                    session: session,
+                    model: model,
+                    onSelectWorkspace: { selectedWorkspaceID = $0 }
+                )
+                .id(selectedWorkspace.id)
+            } else {
+                NavigationStack {
+                    List(session.workspaces) { workspace in
+                        Button {
+                            selectedWorkspaceID = workspace.id
+                        } label: {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(workspace.name)
+                                    .font(.headline)
+                                Text("\(workspace.baseCurrency.rawValue) · \(workspace.timezone)")
+                                    .foregroundStyle(.secondary)
+                                Text(workspace.role.uppercased())
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.green)
+                            }
+                            .padding(.vertical, 4)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .padding(.vertical, 4)
-                }
-            }
-            .navigationTitle("Hello, \(session.user.displayName)")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Sign out") {
-                        Task { await model.logout() }
+                    .navigationTitle("Hello, \(session.user.displayName)")
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("Sign out") {
+                                Task { await model.logout() }
+                            }
+                        }
                     }
-                }
-            }
-            .overlay {
-                if session.workspaces.isEmpty {
-                    ContentUnavailableView("No workspaces", systemImage: "rectangle.3.group")
+                    .overlay {
+                        if session.workspaces.isEmpty {
+                            ContentUnavailableView("No workspaces", systemImage: "rectangle.3.group")
+                        }
+                    }
                 }
             }
         }
+    }
+
+    private var selectedWorkspace: BudgetWorkspace? {
+        session.workspaces.first { $0.id == selectedWorkspaceID }
     }
 }
 

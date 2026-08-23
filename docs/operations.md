@@ -83,6 +83,9 @@ it. A backup that has never been restored is a hypothesis.
 2. Pull the new image.
 3. Start it. Pending migrations apply during startup.
 4. Watch `/readyz` until it answers `200`.
+5. Open the web interface and confirm that Overview loads for an existing workspace. At compact
+   width the primary destinations appear in the bottom navigation; at wider widths they appear
+   in the workspace sidebar.
 
 If startup fails, the container exits and the previous schema is untouched only if no
 migration committed. Check the logs before retrying: a migration that failed partway is

@@ -163,6 +163,7 @@ struct TransactionEditorView: View {
                     }
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle(transaction == nil ? "Add transaction" : "Edit transaction")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

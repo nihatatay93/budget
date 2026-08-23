@@ -1,13 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { Navigate, Route, Routes } from "react-router-dom";
 
-import { APIError, getSession, sessionQueryKey } from "../api/client";
+import { APIError, type SessionResponse, getSession, sessionQueryKey } from "../api/client";
+import { AppStatus } from "../components/ExperiencePrimitives";
 import { DashboardPage } from "../pages/DashboardPage";
 import { LoginPage } from "../pages/LoginPage";
 import { RegisterPage } from "../pages/RegisterPage";
 
 export function App() {
-  const session = useQuery({
+  const session = useQuery<SessionResponse | null>({
     queryKey: sessionQueryKey,
     queryFn: getSession,
     retry: false,
@@ -15,29 +16,29 @@ export function App() {
 
   if (session.isPending) {
     return (
-      <main className="app-shell center-content">
-        <section className="brand-panel compact-panel" aria-live="polite">
-          <p className="eyebrow">Self-hosted personal finance</p>
-          <h1>Budget</h1>
-          <p>Opening your workspace…</p>
-        </section>
-      </main>
+      <AppStatus
+        description="Restoring your secure session and preparing your financial workspace."
+        eyebrow="Private personal finance"
+        title="Opening Budget"
+      />
     );
   }
 
-  const unauthenticated = session.error instanceof APIError && session.error.status === 401;
+  const unauthenticated = session.data === null
+    || (session.error instanceof APIError && session.error.status === 401);
   if (session.isError && !unauthenticated) {
     return (
-      <main className="app-shell center-content">
-        <section className="brand-panel compact-panel">
-          <p className="eyebrow">Connection problem</p>
-          <h1>Budget</h1>
-          <p>{session.error.message}</p>
+      <AppStatus
+        action={(
           <button type="button" onClick={() => void session.refetch()}>
             Try again
           </button>
-        </section>
-      </main>
+        )}
+        description={session.error.message}
+        eyebrow="Connection problem"
+        title="Budget is unavailable"
+        tone="error"
+      />
     );
   }
 
@@ -53,9 +54,10 @@ export function App() {
 
   return (
     <Routes>
+      <Route path="/" element={session.data ? <DashboardPage session={session.data} /> : null} />
       <Route
-        path="/"
-        element={session.data ? <DashboardPage session={session.data} /> : <Navigate to="/login" replace />}
+        path="/workspaces/:workspaceId/*"
+        element={session.data ? <DashboardPage session={session.data} /> : null}
       />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -96,4 +96,13 @@ struct WorkspaceCollaborationPolicyTests {
         #expect(workspace.membershipRole == nil)
         #expect(workspace.canManage == false)
     }
+
+    @Test("Invitation credential length mirrors the OpenAPI contract")
+    func invitationCredentialLength() {
+        #expect(WorkspaceInvitationCredential.requiredLength == 43)
+        #expect(WorkspaceInvitationCredential.isValid(String(repeating: "a", count: 43)))
+        #expect(WorkspaceInvitationCredential.isValid("  " + String(repeating: "a", count: 43) + "  "))
+        #expect(!WorkspaceInvitationCredential.isValid(String(repeating: "a", count: 42)))
+        #expect(!WorkspaceInvitationCredential.isValid(String(repeating: "a", count: 44)))
+    }
 }

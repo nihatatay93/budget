@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { SessionResponse, WorkspaceMember } from "../../api/client";
@@ -109,13 +109,22 @@ describe("MembersPanel", () => {
       </QueryClientProvider>,
     );
     const select = (await screen.findAllByRole("combobox"))[2];
-    const { fireEvent } = await import("@testing-library/react");
     fireEvent.change(select, { target: { value: "viewer" } });
 
     await waitFor(() =>
       expect(screen.getByText("You do not have access to this workspace operation."))
         .toBeInTheDocument(),
     );
+  });
+
+  it("requires explicit confirmation before removing a member", async () => {
+    renderPanel(workspaceAs("owner"), ownerID);
+    const member = (await screen.findByText("member@example.com")).closest("article");
+    fireEvent.click(within(member!).getByRole("button", { name: "Remove" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Remove Member?" });
+    expect(dialog).toHaveTextContent("immediately lose access");
+    expect(within(dialog).getByRole("button", { name: "Remove member" })).toBeInTheDocument();
   });
 });
 

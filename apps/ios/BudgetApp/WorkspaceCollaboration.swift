@@ -1,5 +1,14 @@
 import Foundation
 
+enum WorkspaceInvitationCredential {
+    /// Mirrors the exact min/max length in the OpenAPI invitation schemas.
+    static let requiredLength = 43
+
+    static func isValid(_ value: String) -> Bool {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).count == requiredLength
+    }
+}
+
 /*
  * These predicates mirror internal/workspace/collaboration.go. The server stays the
  * authority; they exist so the interface offers only actions it will accept, rather than

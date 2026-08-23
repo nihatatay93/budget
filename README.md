@@ -1,15 +1,27 @@
 # Budget
 
-Budget is an open-source, self-hostable personal finance application.
+Budget is an open-source, self-hostable personal finance workspace for understanding where
+money is, where it went, and what remains in the monthly plan. It combines a responsive web
+experience, a native SwiftUI iOS application, a Go modular-monolith backend, and PostgreSQL as
+the only mandatory infrastructure dependency.
 
-The product combines:
+![Budget overview on the web](docs/assets/screenshots/overview-web.jpg)
 
-- a Go modular-monolith backend
-- a React and TypeScript web application
-- a native SwiftUI iOS application
-- PostgreSQL as the only mandatory infrastructure dependency
+_Representative workspace data._
 
-The project is pre-alpha. Its accepted architecture and financial model are documented in:
+## What you can do
+
+- See posted balances, pending activity, income, spending, and the current budget at a glance.
+- Record expenses, income, refunds, split transactions, transfers, and adjustments without
+  losing the ledger relationships behind each total.
+- Organize money with multi-currency accounts and hierarchical income or expense categories.
+- Plan monthly category budgets and compare them with posted allocation activity.
+- Explore account and category reports for a selected period.
+- Share a workspace through invitations and owner, editor, or viewer roles.
+- Move between Overview, Transactions, Budget, Accounts, and More from compact web and iOS
+  navigation; the wider web layout keeps reporting and management destinations visible.
+
+Start with the [product tour](docs/product-tour.md), or review the accepted project direction:
 
 - [Architecture](docs/architecture.md)
 - [Technology stack](docs/tech-stack.md)
@@ -35,8 +47,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contributor setup and validation comm
 
 ## Self-hosting
 
-One application container and PostgreSQL. The image contains the Go API and the compiled
-React application, served from the same origin.
+Budget deliberately keeps self-hosting small: one application container and PostgreSQL. The
+application image contains both the Go API and compiled React interface, served from the same
+origin. No separate frontend service, Redis, message broker, or hosted cloud dependency is
+required.
 
 ```bash
 git clone https://github.com/nihatatay93/budget.git
@@ -46,6 +60,8 @@ docker compose up -d
 ```
 
 Then open <http://localhost:8080> and register. The first account creates its own workspace.
+The same responsive interface works in desktop and mobile browsers. The native iOS client can
+connect to the same server using its public HTTPS address.
 
 Before exposing it beyond your machine, set these in `.env`:
 

@@ -10,6 +10,7 @@ import {
   register,
   sessionQueryKey,
 } from "../api/client";
+import { AppIcon, BrandMark } from "../components/ExperiencePrimitives";
 import { type Currency, SUPPORTED_CURRENCIES, currencyLabel } from "../lib/currency";
 
 type AuthMode = "login" | "register";
@@ -59,14 +60,37 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   return (
     <main className="app-shell auth-shell">
       <section className="brand-panel auth-brand">
+        <BrandMark />
         <p className="eyebrow">Private by design</p>
         <h1>Budget</h1>
-        <p>One calm place for the money decisions that shape your everyday life.</p>
+        <p className="auth-promise">
+          See where you stand, plan what comes next, and keep every number on infrastructure
+          you control.
+        </p>
+        <ul className="auth-values" aria-label="Budget principles">
+          <li>
+            <span className="auth-value-icon"><AppIcon name="chart" /></span>
+            <span><strong>Clear by default</strong>Balances, spending, and plans stay easy to scan.</span>
+          </li>
+          <li>
+            <span className="auth-value-icon"><AppIcon name="shield" /></span>
+            <span><strong>Yours by design</strong>Self-hosted data with secure web and native sessions.</span>
+          </li>
+          <li>
+            <span className="auth-value-icon"><AppIcon name="layers" /></span>
+            <span><strong>Built on the ledger</strong>Every total traces back to real financial activity.</span>
+          </li>
+        </ul>
       </section>
       <section className="form-panel">
-        <div>
+        <div className="form-panel-heading">
           <p className="eyebrow">{registering ? "Create your home base" : "Welcome back"}</p>
           <h2>{registering ? "Start a workspace" : "Sign in"}</h2>
+          <p>
+            {registering
+              ? "Create the private space where your accounts, plans, and people come together."
+              : "Continue to your private financial workspace."}
+          </p>
         </div>
         <form onSubmit={submit}>
           {registering ? (
@@ -131,7 +155,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
             />
             {registering ? <span>Use at least 15 characters. Spaces are welcome.</span> : null}
           </label>
-          {mutation.isError ? <p className="form-error">{mutation.error.message}</p> : null}
+          {mutation.isError ? <p className="form-error" role="alert">{mutation.error.message}</p> : null}
           <button disabled={mutation.isPending} type="submit">
             {mutation.isPending ? "Working…" : registering ? "Create workspace" : "Sign in"}
           </button>
@@ -142,6 +166,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
             {registering ? "Sign in" : "Create a workspace"}
           </Link>
         </p>
+        <p className="auth-footnote"><AppIcon name="shield" size={16} /> Secure session · No third-party analytics</p>
       </section>
     </main>
   );

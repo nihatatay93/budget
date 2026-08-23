@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Category, MonthlyBudget } from "../../api/client";
+import { expectNoAccessibilityViolations } from "../../test/accessibility";
 import { BudgetPanel } from "./BudgetPanel";
 
 const workspace = {
@@ -58,7 +59,7 @@ describe("BudgetPanel", () => {
       return Promise.resolve(apiError(404, "Not found"));
     });
     vi.stubGlobal("fetch", fetchMock);
-    renderPanel(true);
+    const { container } = renderPanel(true);
 
     expect(await screen.findByText("August plan", { selector: ".budget-plan-title strong" }))
       .toBeInTheDocument();
@@ -68,7 +69,10 @@ describe("BudgetPanel", () => {
       "value",
       "26",
     );
+    fireEvent.click(screen.getByRole("button", { name: "Edit plan" }));
+    expect(screen.getByRole("dialog", { name: /Edit .* plan/ })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Edit complete plan" })).toBeInTheDocument();
+    await expectNoAccessibilityViolations(container);
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringMatching(`/v1/workspaces/${workspace.id}/budgets\\?month=\\d{4}-\\d{2}`),
       expect.any(Object),
@@ -94,6 +98,7 @@ describe("BudgetPanel", () => {
     renderPanel(true);
 
     expect(await screen.findByText(/No plan exists for/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Create plan" }));
     fireEvent.change(screen.getByLabelText("Plan name"), { target: { value: "Household plan" } });
     fireEvent.click(screen.getByRole("button", { name: "Add category" }));
     fireEvent.change(screen.getByLabelText("Budget amount 1"), { target: { value: "50.00" } });
@@ -133,6 +138,7 @@ describe("BudgetPanel", () => {
     renderPanel(true);
 
     await screen.findByText(/No plan exists for/);
+    fireEvent.click(screen.getByRole("button", { name: "Create plan" }));
     fireEvent.click(screen.getByRole("button", { name: "Add category" }));
     fireEvent.click(screen.getByRole("button", { name: "Add category" }));
     fireEvent.change(screen.getByLabelText("Budget amount 1"), { target: { value: "50" } });
@@ -172,10 +178,52 @@ describe("BudgetPanel", () => {
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Save monthly plan" })).not.toBeInTheDocument();
   });
+
+  it("navigates months and distinguishes overspending from net refunds", async () => {
+    const refundCategory: Category = {
+      id: restaurantID,
+      workspace_id: workspace.id,
+      name: "Returns",
+      kind: "expense",
+    };
+    const edgeBudget: MonthlyBudget = {
+      ...monthlyBudget,
+      planned_base_minor: 10000,
+      used_base_minor: 10500,
+      remaining_base_minor: -500,
+      items: [
+        { ...monthlyBudget.items[0], used_base_minor: 11000, remaining_base_minor: -6000 },
+        {
+          id: "refund-item",
+          category_id: refundCategory.id,
+          category_name: refundCategory.name,
+          planned_base_minor: 5000,
+          used_base_minor: -500,
+          remaining_base_minor: 5500,
+        },
+      ],
+    };
+    const requested: string[] = [];
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const path = String(input);
+      requested.push(path);
+      if (path.endsWith("/categories")) {
+        return Promise.resolve(jsonResponse({ categories: [...categories, refundCategory] }));
+      }
+      return Promise.resolve(jsonResponse(edgeBudget));
+    }));
+    renderPanel(true);
+
+    expect(await screen.findByText("Over budget")).toBeInTheDocument();
+    expect(screen.getByText("Net refund")).toBeInTheDocument();
+    expect(screen.getByText("Over plan")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Previous month" }));
+    await waitFor(() => expect(requested.some((path) => path.includes("month=2026-07"))).toBe(true));
+  });
 });
 
 function renderPanel(canManage: boolean) {
-  render(
+  return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <BudgetPanel workspace={workspace} canManage={canManage} />
     </QueryClientProvider>,

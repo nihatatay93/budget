@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 
 import {
   APIError,
@@ -8,6 +9,7 @@ import {
   type Transaction as LedgerTransaction,
   type TransactionWriteRequest,
   accountsQueryKey,
+  categoriesQueryKey,
   createTransaction,
   deleteTransaction,
   financialProjectionQueryPrefix,
@@ -18,16 +20,36 @@ import {
   transactionsQueryKey,
   updateTransaction,
 } from "../../api/client";
-import { formatMoney, majorAmountInput, parseMajorAmount } from "../../lib/currency";
+import { AppIcon } from "../../components/ExperiencePrimitives";
+import {
+  EmptyState,
+  InlineNotice,
+  LoadingState,
+  ModalDialog,
+  MoneyAmount,
+  StatusBadge,
+  type ToastMessage,
+  ToastRegion,
+} from "../../components/Presentation";
+import { majorAmountInput, parseMajorAmount } from "../../lib/currency";
 
 type Workspace = SessionResponse["workspaces"][number];
 type EntryDraft = { key: string; accountId: string; amount: string; baseAmount: string };
 type AllocationDraft = { key: string; categoryId: string; amount: string };
+type KindFilter = "all" | LedgerTransaction["kind"];
+type StatusFilter = "all" | LedgerTransaction["status"];
 
 let nextDraftKey = 0;
+let nextToastKey = 0;
+
 function draftKey() {
   nextDraftKey += 1;
   return `transaction-draft-${nextDraftKey}`;
+}
+
+function toastKey() {
+  nextToastKey += 1;
+  return `transaction-toast-${nextToastKey}`;
 }
 
 function today() {
@@ -57,10 +79,16 @@ export function TransactionsPanel({ workspace, canManage }: { workspace: Workspa
     queryFn: () => listAccounts(workspace.id),
   });
   const categories = useQuery({
-    queryKey: ["workspaces", workspace.id, "categories"],
+    queryKey: categoriesQueryKey(workspace.id),
     queryFn: () => listCategories(workspace.id),
   });
+  const [search, setSearch] = useState("");
+  const [kindFilter, setKindFilter] = useState<KindFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<LedgerTransaction>();
+  const [deleteTarget, setDeleteTarget] = useState<LedgerTransaction>();
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [kind, setKind] = useState<TransactionWriteRequest["kind"]>("standard");
   const [status, setStatus] = useState<TransactionWriteRequest["status"]>("posted");
   const [transactionDate, setTransactionDate] = useState(today);
@@ -71,38 +99,70 @@ export function TransactionsPanel({ workspace, canManage }: { workspace: Workspa
   const [allocations, setAllocations] = useState<AllocationDraft[]>([]);
   const [validation, setValidation] = useState("");
 
+  const accountNames = useMemo(
+    () => new Map((accounts.data ?? []).map((account) => [account.id, account.name])),
+    [accounts.data],
+  );
+  const categoryNames = useMemo(
+    () => new Map((categories.data ?? []).map((category) => [category.id, category.name])),
+    [categories.data],
+  );
+  const filteredTransactions = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase();
+    return (transactions.data ?? []).filter((value) => {
+      if (kindFilter !== "all" && value.kind !== kindFilter) return false;
+      if (statusFilter !== "all" && value.status !== statusFilter) return false;
+      if (!term) return true;
+      const searchable = [
+        value.payee,
+        value.description,
+        value.notes,
+        value.transaction_date,
+        transactionKindLabel(value.kind),
+        value.status,
+        ...value.entries.map((entry) => accountNames.get(entry.account_id)),
+        ...value.allocations.map((allocation) => categoryNames.get(allocation.category_id)),
+      ].filter(Boolean).join(" ").toLocaleLowerCase();
+      return searchable.includes(term);
+    });
+  }, [accountNames, categoryNames, kindFilter, search, statusFilter, transactions.data]);
+
   const save = useMutation({
     mutationFn: (input: TransactionWriteRequest) =>
       editing
         ? updateTransaction(workspace.id, editing.id, input)
         : createTransaction(workspace.id, input),
     onSuccess: async () => {
-      reset();
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: transactionsQueryKey(workspace.id) }),
-        queryClient.invalidateQueries({ queryKey: accountsQueryKey(workspace.id) }),
-        queryClient.invalidateQueries({
-          queryKey: financialProjectionQueryPrefix(workspace.id),
-        }),
-        queryClient.invalidateQueries({ queryKey: monthlyBudgetQueryPrefix(workspace.id) }),
-      ]);
+      const title = editing ? "Transaction updated" : "Transaction added";
+      closeEditor();
+      setToasts((current) => [...current, { id: toastKey(), title, tone: "positive" }]);
+      await invalidateFinancialViews();
     },
   });
   const remove = useMutation({
     mutationFn: (transactionId: string) => deleteTransaction(workspace.id, transactionId),
     onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: transactionsQueryKey(workspace.id) }),
-        queryClient.invalidateQueries({ queryKey: accountsQueryKey(workspace.id) }),
-        queryClient.invalidateQueries({
-          queryKey: financialProjectionQueryPrefix(workspace.id),
-        }),
-        queryClient.invalidateQueries({ queryKey: monthlyBudgetQueryPrefix(workspace.id) }),
-      ]);
+      setDeleteTarget(undefined);
+      setToasts((current) => [...current, {
+        id: toastKey(),
+        title: "Transaction deleted",
+        description: "Its entries no longer affect balances.",
+        tone: "positive",
+      }]);
+      await invalidateFinancialViews();
     },
   });
 
-  function reset() {
+  async function invalidateFinancialViews() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: transactionsQueryKey(workspace.id) }),
+      queryClient.invalidateQueries({ queryKey: accountsQueryKey(workspace.id) }),
+      queryClient.invalidateQueries({ queryKey: financialProjectionQueryPrefix(workspace.id) }),
+      queryClient.invalidateQueries({ queryKey: monthlyBudgetQueryPrefix(workspace.id) }),
+    ]);
+  }
+
+  function resetDraft() {
     setEditing(undefined);
     setKind("standard");
     setStatus("posted");
@@ -113,6 +173,17 @@ export function TransactionsPanel({ workspace, canManage }: { workspace: Workspa
     setEntries([emptyEntry(accounts.data?.[0]?.id)]);
     setAllocations([]);
     setValidation("");
+    save.reset();
+  }
+
+  function startCreate() {
+    resetDraft();
+    setEditorOpen(true);
+  }
+
+  function closeEditor() {
+    setEditorOpen(false);
+    resetDraft();
   }
 
   function edit(value: LedgerTransaction) {
@@ -124,17 +195,21 @@ export function TransactionsPanel({ workspace, canManage }: { workspace: Workspa
     setDescription(value.description ?? "");
     setNotes(value.notes ?? "");
     setEntries(value.entries.map((entry) => ({
-      key: draftKey(), accountId: entry.account_id,
+      key: draftKey(),
+      accountId: entry.account_id,
       amount: majorAmountInput(entry.amount_minor),
       baseAmount: accountCurrency(accounts.data ?? [], entry.account_id) === workspace.base_currency
         ? ""
         : majorAmountInput(entry.base_amount_minor),
     })));
     setAllocations(value.allocations.map((allocation) => ({
-      key: draftKey(), categoryId: allocation.category_id,
+      key: draftKey(),
+      categoryId: allocation.category_id,
       amount: majorAmountInput(allocation.amount_base_minor),
     })));
     setValidation("");
+    save.reset();
+    setEditorOpen(true);
   }
 
   function submit(event: FormEvent) {
@@ -148,19 +223,21 @@ export function TransactionsPanel({ workspace, canManage }: { workspace: Workspa
     for (const entry of entries) {
       const amount = parseMajorAmount(entry.amount);
       const baseAmount = entry.baseAmount.trim() ? parseMajorAmount(entry.baseAmount) : undefined;
-      if (!entry.accountId || amount === null || amount === 0 ||
-          (entry.baseAmount.trim() && baseAmount === null) ||
-          (baseAmount !== undefined && baseAmount !== null && baseAmount !== 0 && Math.sign(baseAmount) !== Math.sign(amount))) {
-        setValidation("Every entry needs an account and a non-zero amount with at most two decimals; a non-zero manual base amount must use the same sign.");
+      if (!entry.accountId || amount === null || amount === 0
+          || (entry.baseAmount.trim() && baseAmount === null)
+          || (baseAmount !== undefined && baseAmount !== null && baseAmount !== 0
+            && Math.sign(baseAmount) !== Math.sign(amount))) {
+        setValidation(
+          "Every entry needs an account and a non-zero amount with at most two decimals; "
+          + "a non-zero manual base amount must use the same sign.",
+        );
         return;
       }
       const parsedEntry: TransactionWriteRequest["entries"][number] = {
         account_id: entry.accountId,
         amount_minor: amount,
       };
-      if (baseAmount !== undefined && baseAmount !== null) {
-        parsedEntry.base_amount_minor = baseAmount;
-      }
+      if (baseAmount !== undefined && baseAmount !== null) parsedEntry.base_amount_minor = baseAmount;
       parsedEntries.push(parsedEntry);
     }
     const parsedAllocations: NonNullable<TransactionWriteRequest["allocations"]> = [];
@@ -184,63 +261,127 @@ export function TransactionsPanel({ workspace, canManage }: { workspace: Workspa
     });
   }
 
-  const accountNames = new Map((accounts.data ?? []).map((account) => [account.id, account.name]));
-  const categoryNames = new Map((categories.data ?? []).map((category) => [category.id, category.name]));
+  function clearFilters() {
+    setSearch("");
+    setKindFilter("all");
+    setStatusFilter("all");
+  }
+
+  const dependenciesUnavailable = accounts.isError || categories.isError;
 
   return (
-    <section className="setup-panel transactions-panel" aria-labelledby="transactions-heading">
-      <div className="section-heading">
+    <section className="transactions-workspace" aria-labelledby="transaction-register-heading">
+      <div className="transaction-toolbar">
+        <label className="transaction-search">
+          <span className="visually-hidden">Search transactions</span>
+          <AppIcon name="transactions" />
+          <input
+            placeholder="Search payee, account, category…"
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </label>
+        <label>
+          <span className="visually-hidden">Transaction kind</span>
+          <select aria-label="Transaction kind" value={kindFilter} onChange={(event) => setKindFilter(event.target.value as KindFilter)}>
+            <option value="all">All types</option>
+            <option value="standard">Expense & income</option>
+            <option value="transfer">Transfers</option>
+            <option value="adjustment">Adjustments</option>
+          </select>
+        </label>
+        <label>
+          <span className="visually-hidden">Transaction status</span>
+          <select aria-label="Transaction status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}>
+            <option value="all">All statuses</option>
+            <option value="posted">Posted</option>
+            <option value="pending">Pending</option>
+          </select>
+        </label>
+        {canManage ? (
+          <button disabled={accounts.data?.length === 0} onClick={startCreate} type="button">
+            Add transaction
+          </button>
+        ) : null}
+      </div>
+
+      <div className="transaction-register-heading">
         <div>
-          <p className="eyebrow">The ledger</p>
-          <h2 id="transactions-heading">Transactions</h2>
+          <p className="eyebrow">Ledger register</p>
+          <h2 id="transaction-register-heading">Activity</h2>
         </div>
-        <span>{transactions.data?.length ?? 0} recent</span>
+        <span>{filteredTransactions.length} of {transactions.data?.length ?? 0}</span>
       </div>
-      {transactions.isPending ? <p className="resource-state">Loading…</p> : null}
-      {transactions.error ? <p className="form-error">{transactions.error.message}</p> : null}
-      {transactions.data?.length === 0 ? <p className="resource-state">Record your first transaction.</p> : null}
-      <div className="transaction-list">
-        {transactions.data?.map((value) => {
-          const total = value.entries.reduce((sum, entry) => sum + entry.base_amount_minor, 0);
-          return (
-            <article className="transaction-row" key={value.id}>
-              <div>
-                <strong>{value.payee ?? value.description ?? transactionKindLabel(value.kind)}</strong>
-                <small>
-                  {value.transaction_date} · {transactionKindLabel(value.kind)} · {value.status}
-                </small>
-                <small>
-                  {value.entries.map((entry) => accountNames.get(entry.account_id) ?? "Unavailable account").join(" → ")}
-                  {value.allocations.length > 0
-                    ? ` · ${value.allocations.map((allocation) => categoryNames.get(allocation.category_id) ?? "Unavailable category").join(", ")}`
-                    : ""}
-                </small>
-              </div>
-              <div className="resource-actions">
-                <span>{value.kind === "transfer" ? "Transfer" : formatMoney(total, workspace.base_currency)}</span>
-                {canManage ? <button className="text-button" type="button" onClick={() => edit(value)}>Edit</button> : null}
-                {canManage ? (
-                  <button
-                    className="text-button danger"
-                    type="button"
-                    onClick={() => {
-                      if (window.confirm("Delete this transaction? Its entries will stop affecting balances.")) {
-                        remove.mutate(value.id);
-                      }
-                    }}
-                  >
-                    Delete
-                  </button>
-                ) : null}
-              </div>
-            </article>
-          );
-        })}
+
+      {canManage && accounts.data?.length === 0 && !accounts.isPending ? (
+        <InlineNotice
+          action={<Link to={`/workspaces/${workspace.id}/accounts`}>Add account</Link>}
+          title="An account is required"
+          tone="warning"
+        >Create an account before recording a transaction.</InlineNotice>
+      ) : null}
+      {!canManage ? (
+        <InlineNotice title="Read-only access">You can review and filter activity, but only workspace managers can change it.</InlineNotice>
+      ) : null}
+      {transactions.isPending ? <LoadingState label="Loading transactions" rows={5} /> : null}
+      {transactions.error ? <InlineNotice tone="danger">{transactions.error.message}</InlineNotice> : null}
+      {!transactions.isPending && !transactions.error && transactions.data?.length === 0 ? (
+        <EmptyState
+          action={canManage && accounts.data?.length ? <button onClick={startCreate} type="button">Add transaction</button> : undefined}
+          description="Expenses, income, transfers, and adjustments will appear here."
+          icon="transactions"
+          title="No transactions yet"
+        />
+      ) : null}
+      {Boolean(transactions.data?.length) && filteredTransactions.length === 0 ? (
+        <EmptyState
+          action={<button className="secondary-button" onClick={clearFilters} type="button">Clear filters</button>}
+          description="Try a different search term, type, or status."
+          icon="transactions"
+          title="No matching transactions"
+        />
+      ) : null}
+
+      <div className="transaction-register">
+        {filteredTransactions.map((value) => (
+          <TransactionRegisterRow
+            accountNames={accountNames}
+            canManage={canManage}
+            categoryNames={categoryNames}
+            key={value.id}
+            onDelete={() => setDeleteTarget(value)}
+            onEdit={() => edit(value)}
+            transaction={value}
+            workspace={workspace}
+          />
+        ))}
       </div>
-      {remove.error ? <p className="form-error">{mutationMessage(remove.error)}</p> : null}
-      {canManage ? (
-        <form className="resource-form transaction-form" onSubmit={submit}>
-          <h3>{editing ? "Edit transaction" : "Add transaction"}</h3>
+      {remove.error ? <InlineNotice tone="danger">{mutationMessage(remove.error)}</InlineNotice> : null}
+
+      <ModalDialog
+        description="Entries affect account balances; allocations affect spending, income, and budget reporting."
+        footer={(
+          <>
+            <button className="secondary-button" onClick={closeEditor} type="button">Cancel</button>
+            <button
+              disabled={save.isPending || accounts.data?.length === 0}
+              form="transaction-editor-form"
+              type="submit"
+            >
+              {save.isPending ? "Saving…" : editing ? "Save transaction" : "Add transaction"}
+            </button>
+          </>
+        )}
+        onClose={closeEditor}
+        open={editorOpen}
+        placement="drawer"
+        title={editing ? "Edit transaction" : "Add transaction"}
+      >
+        <form className="transaction-editor-form" id="transaction-editor-form" onSubmit={submit}>
+          {dependenciesUnavailable ? (
+            <InlineNotice tone="danger">Accounts or categories could not be loaded for this editor.</InlineNotice>
+          ) : null}
           <div className="form-columns transaction-basics">
             <label>
               Kind
@@ -308,7 +449,10 @@ export function TransactionsPanel({ workspace, canManage }: { workspace: Workspa
                   <label>
                     Amount {currency ? `(${currency})` : ""}
                     <input
-                      required inputMode="decimal" placeholder="-12.50" value={entry.amount}
+                      inputMode="decimal"
+                      placeholder="-12.50"
+                      required
+                      value={entry.amount}
                       onChange={(event) => setEntries((current) => current.map((item) =>
                         item.key === entry.key ? { ...item, amount: event.target.value } : item,
                       ))}
@@ -318,7 +462,9 @@ export function TransactionsPanel({ workspace, canManage }: { workspace: Workspa
                     <label>
                       Base amount ({workspace.base_currency}, optional)
                       <input
-                        inputMode="decimal" placeholder="Auto historical rate" value={entry.baseAmount}
+                        inputMode="decimal"
+                        placeholder="Auto historical rate"
+                        value={entry.baseAmount}
                         onChange={(event) => setEntries((current) => current.map((item) =>
                           item.key === entry.key ? { ...item, baseAmount: event.target.value } : item,
                         ))}
@@ -326,14 +472,14 @@ export function TransactionsPanel({ workspace, canManage }: { workspace: Workspa
                     </label>
                   ) : null}
                   {entries.length > 1 ? (
-                    <button className="text-button danger" type="button" onClick={() => setEntries((current) => current.filter((item) => item.key !== entry.key))}>
+                    <button className="text-button danger" onClick={() => setEntries((current) => current.filter((item) => item.key !== entry.key))} type="button">
                       Remove entry {index + 1}
                     </button>
                   ) : null}
                 </div>
               );
             })}
-            <button className="secondary-button line-button" type="button" onClick={() => setEntries((current) => [...current, emptyEntry(accounts.data?.[0]?.id)])}>
+            <button className="secondary-button line-button" onClick={() => setEntries((current) => [...current, emptyEntry(accounts.data?.[0]?.id)])} type="button">
               Add account entry
             </button>
           </fieldset>
@@ -347,7 +493,8 @@ export function TransactionsPanel({ workspace, canManage }: { workspace: Workspa
                   <label>
                     Category
                     <select
-                      required value={allocation.categoryId}
+                      required
+                      value={allocation.categoryId}
                       onChange={(event) => setAllocations((current) => current.map((item) =>
                         item.key === allocation.key ? { ...item, categoryId: event.target.value } : item,
                       ))}
@@ -361,18 +508,21 @@ export function TransactionsPanel({ workspace, canManage }: { workspace: Workspa
                   <label>
                     Base amount ({workspace.base_currency})
                     <input
-                      required inputMode="decimal" placeholder="-12.50" value={allocation.amount}
+                      inputMode="decimal"
+                      placeholder="-12.50"
+                      required
+                      value={allocation.amount}
                       onChange={(event) => setAllocations((current) => current.map((item) =>
                         item.key === allocation.key ? { ...item, amount: event.target.value } : item,
                       ))}
                     />
                   </label>
-                  <button className="text-button danger" type="button" onClick={() => setAllocations((current) => current.filter((item) => item.key !== allocation.key))}>
+                  <button className="text-button danger" onClick={() => setAllocations((current) => current.filter((item) => item.key !== allocation.key))} type="button">
                     Remove allocation {index + 1}
                   </button>
                 </div>
               ))}
-              <button className="secondary-button line-button" type="button" onClick={() => setAllocations((current) => [...current, emptyAllocation(categories.data?.[0]?.id)])}>
+              <button className="secondary-button line-button" onClick={() => setAllocations((current) => [...current, emptyAllocation(categories.data?.[0]?.id)])} type="button">
                 Add category allocation
               </button>
             </fieldset>
@@ -381,17 +531,92 @@ export function TransactionsPanel({ workspace, canManage }: { workspace: Workspa
             Notes (optional)
             <input maxLength={4000} value={notes} onChange={(event) => setNotes(event.target.value)} />
           </label>
-          {validation ? <p className="form-error">{validation}</p> : null}
-          {save.error ? <p className="form-error">{mutationMessage(save.error)}</p> : null}
-          <div className="form-actions">
-            <button disabled={save.isPending || accounts.data?.length === 0} type="submit">
-              {editing ? "Save transaction" : "Add transaction"}
-            </button>
-            {editing ? <button className="secondary-button" type="button" onClick={reset}>Cancel</button> : null}
-          </div>
+          {validation ? <InlineNotice tone="danger">{validation}</InlineNotice> : null}
+          {save.error ? <InlineNotice tone="danger">{mutationMessage(save.error)}</InlineNotice> : null}
         </form>
-      ) : <p className="permission-note">Viewer access is read-only.</p>}
+      </ModalDialog>
+
+      <ModalDialog
+        description="This is a soft deletion. The transaction remains recoverable in storage, but stops affecting balances and reports."
+        footer={(
+          <>
+            <button className="secondary-button" onClick={() => setDeleteTarget(undefined)} type="button">Cancel</button>
+            <button
+              className="danger-button"
+              disabled={remove.isPending}
+              onClick={() => deleteTarget && remove.mutate(deleteTarget.id)}
+              type="button"
+            >{remove.isPending ? "Deleting…" : "Delete transaction"}</button>
+          </>
+        )}
+        onClose={() => setDeleteTarget(undefined)}
+        open={Boolean(deleteTarget)}
+        title="Delete this transaction?"
+      >
+        <p><strong>{deleteTarget ? transactionTitle(deleteTarget) : "Transaction"}</strong> will stop affecting account balances, budgets, and reports.</p>
+      </ModalDialog>
+
+      <ToastRegion
+        messages={toasts}
+        onDismiss={(id) => setToasts((current) => current.filter((toast) => toast.id !== id))}
+      />
     </section>
+  );
+}
+
+function TransactionRegisterRow({
+  accountNames,
+  canManage,
+  categoryNames,
+  onDelete,
+  onEdit,
+  transaction,
+  workspace,
+}: {
+  accountNames: Map<string, string>;
+  canManage: boolean;
+  categoryNames: Map<string, string>;
+  onDelete: () => void;
+  onEdit: () => void;
+  transaction: LedgerTransaction;
+  workspace: Workspace;
+}) {
+  const total = transactionTotal(transaction);
+  const accounts = transaction.entries
+    .map((entry) => accountNames.get(entry.account_id) ?? "Unavailable account")
+    .join(" → ");
+  const categories = transaction.allocations
+    .map((allocation) => categoryNames.get(allocation.category_id) ?? "Unavailable category")
+    .join(", ");
+  const direction = transactionDirection(transaction, total);
+  return (
+    <article className="transaction-register-row">
+      <span aria-hidden="true" className={`transaction-direction transaction-direction-${direction}`}>
+        <AppIcon name={transaction.kind === "transfer" ? "accounts" : "transactions"} />
+      </span>
+      <div className="transaction-register-copy">
+        <div>
+          <strong>{transactionTitle(transaction)}</strong>
+          <span className="transaction-register-badges">
+            <StatusBadge tone={transaction.status === "pending" ? "warning" : "positive"}>{transaction.status}</StatusBadge>
+            {transaction.kind !== "standard" ? <StatusBadge>{transactionKindLabel(transaction.kind)}</StatusBadge> : null}
+          </span>
+        </div>
+        <small>{formatTransactionDate(transaction.transaction_date)} · {accounts}</small>
+        {categories ? <small>{categories}</small> : null}
+      </div>
+      <div className="transaction-register-amount">
+        {transaction.kind === "transfer" ? <span>Transfer</span> : total === null ? <span>Amount unavailable</span> : (
+          <MoneyAmount amount={total} currency={workspace.base_currency} signed />
+        )}
+      </div>
+      {canManage ? (
+        <div className="transaction-register-actions">
+          <button className="text-button" onClick={onEdit} type="button">Edit</button>
+          <button className="text-button danger" onClick={onDelete} type="button">Delete</button>
+        </div>
+      ) : null}
+    </article>
   );
 }
 
@@ -399,10 +624,37 @@ function accountCurrency(accounts: Account[], accountId: string) {
   return accounts.find((account) => account.id === accountId)?.currency;
 }
 
+function transactionTitle(transaction: LedgerTransaction) {
+  return transaction.payee ?? transaction.description ?? transactionKindLabel(transaction.kind);
+}
+
 function transactionKindLabel(kind: LedgerTransaction["kind"]) {
   if (kind === "standard") return "Expense or income";
   if (kind === "transfer") return "Transfer";
   return "Balance adjustment";
+}
+
+function transactionTotal(transaction: LedgerTransaction): number | null {
+  let total = 0;
+  for (const entry of transaction.entries) {
+    const next = total + entry.base_amount_minor;
+    if (!Number.isSafeInteger(next)) return null;
+    total = next;
+  }
+  return total;
+}
+
+function transactionDirection(transaction: LedgerTransaction, total: number | null) {
+  if (transaction.kind === "transfer") return "transfer";
+  if (total === null || total === 0) return "neutral";
+  return total > 0 ? "income" : "expense";
+}
+
+function formatTransactionDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return value;
+  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" })
+    .format(new Date(Date.UTC(year, month - 1, day)));
 }
 
 function mutationMessage(error: Error) {

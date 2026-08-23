@@ -1,8 +1,10 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { FinancialProjection } from "../../api/client";
+import { expectNoAccessibilityViolations } from "../../test/accessibility";
 import { FinancialDashboard } from "./FinancialDashboard";
 
 const workspace = {
@@ -48,12 +50,8 @@ afterEach(() => {
 
 describe("FinancialDashboard", () => {
   it("keeps authoritative and pending totals explicit and exposes drill-down links", async () => {
-    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) =>
-      Promise.resolve(String(input).includes("/budgets?")
-        ? jsonResponse(monthlyBudget())
-        : jsonResponse(projection)),
-    ));
-    renderDashboard();
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(jsonResponse(projection))));
+    const { container } = renderDashboard();
 
     const balance = (await screen.findByText("Balance")).closest("article");
     expect(balance).not.toBeNull();
@@ -64,26 +62,25 @@ describe("FinancialDashboard", () => {
     expect(screen.getByText("Food")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Manage accounts" })).toHaveAttribute(
       "href",
-      "#accounts-heading",
+      `/workspaces/${workspace.id}/accounts`,
     );
     expect(screen.getByRole("link", { name: "Review transactions" })).toHaveAttribute(
       "href",
-      "#transactions-heading",
+      `/workspaces/${workspace.id}/transactions`,
     );
-    expect(screen.getByRole("heading", { name: "August plan" })).toBeInTheDocument();
-    expect(screen.getByRole("progressbar", { name: "Current monthly budget usage" }))
-      .toHaveAttribute("value", "26");
-    expect(screen.getByRole("link", { name: "Review budget" })).toHaveAttribute(
+    expect(screen.getByRole("img", { name: /Income:.*2,000\.00/ })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /Spending:.*750\.00/ })).toBeInTheDocument();
+    expect(screen.getByText("Net cash flow")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Review monthly plan" })).toHaveAttribute(
       "href",
-      "#monthly-budget-heading",
+      `/workspaces/${workspace.id}/budget`,
     );
+    await expectNoAccessibilityViolations(container);
   });
 
   it("requests an explicit inclusive date range only after it is applied", async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL) => Promise.resolve(
-      String(input).includes("/budgets?")
-        ? jsonResponse({}, 404)
-        : jsonResponse(projection),
+      jsonResponse(projection),
     ));
     vi.stubGlobal("fetch", fetchMock);
     renderDashboard();
@@ -95,7 +92,7 @@ describe("FinancialDashboard", () => {
     fireEvent.change(screen.getByLabelText("Projection end date"), {
       target: { value: "2026-07-31" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply range" }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -104,12 +101,32 @@ describe("FinancialDashboard", () => {
       );
     });
   });
+
+  it("rejects an inverted date range before making another request", async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse(projection)));
+    vi.stubGlobal("fetch", fetchMock);
+    renderDashboard();
+    await screen.findByText("Checking");
+
+    fireEvent.change(screen.getByLabelText("Projection start date"), {
+      target: { value: "2026-08-20" },
+    });
+    fireEvent.change(screen.getByLabelText("Projection end date"), {
+      target: { value: "2026-08-01" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Apply range" }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent("on or before the end date");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });
 
 function renderDashboard() {
-  render(
+  return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <FinancialDashboard workspace={workspace} />
+      <MemoryRouter>
+        <FinancialDashboard workspace={workspace} />
+      </MemoryRouter>
     </QueryClientProvider>,
   );
 }
@@ -119,21 +136,4 @@ function jsonResponse(body: unknown, status = 200) {
     status,
     headers: { "Content-Type": "application/json" },
   });
-}
-
-function monthlyBudget() {
-  return {
-    id: "0198b7ae-5e93-72d9-ab00-32b0861a3f38",
-    workspace_id: workspace.id,
-    name: "August plan",
-    month: "2026-08",
-    timezone: workspace.timezone,
-    base_currency: "TRY",
-    planned_base_minor: 5000,
-    used_base_minor: 1300,
-    remaining_base_minor: 3700,
-    items: [],
-    created_at: "2026-08-01T08:00:00Z",
-    updated_at: "2026-08-18T08:00:00Z",
-  };
 }

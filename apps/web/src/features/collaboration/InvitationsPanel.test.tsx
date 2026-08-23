@@ -39,6 +39,7 @@ describe("InvitationsPanel", () => {
     const fetchMock = stubFetch();
     renderPanel("owner");
     expect(await screen.findByText("invited@example.com")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Invite person" }));
 
     const options = screen.getAllByRole("option").map((option) => option.textContent);
     expect(options).toEqual(["admin", "member", "viewer"]);
@@ -50,6 +51,7 @@ describe("InvitationsPanel", () => {
     stubFetch();
     renderPanel("admin");
     await screen.findByText("invited@example.com");
+    fireEvent.click(screen.getByRole("button", { name: "Invite person" }));
 
     const options = screen.getAllByRole("option").map((option) => option.textContent);
     expect(options).toEqual(["member", "viewer"]);
@@ -74,6 +76,7 @@ describe("InvitationsPanel", () => {
     vi.stubGlobal("fetch", fetchMock);
     renderPanel("owner");
     await screen.findByText("invited@example.com");
+    fireEvent.click(screen.getByRole("button", { name: "Invite person" }));
 
     fireEvent.change(screen.getByLabelText("Email"), {
       target: { value: "new@example.com" },
@@ -81,10 +84,23 @@ describe("InvitationsPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create invitation" }));
 
     await waitFor(() => expect(screen.getByText(acceptanceToken)).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "Close" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "I saved the code" })).toBeInTheDocument();
     // The token is a credential: it must reach the page body and nothing else.
     const posted = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
     expect(posted?.[0]).toBe(`/v1/workspaces/${workspaceID}/invitations`);
     expect(String(posted?.[0])).not.toContain(acceptanceToken);
+  });
+
+  it("requires confirmation before revoking pending access", async () => {
+    stubFetch();
+    renderPanel("owner");
+    await screen.findByText("invited@example.com");
+    fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
+
+    const dialog = screen.getByRole("dialog", { name: "Revoke invitation?" });
+    expect(dialog).toHaveTextContent("will no longer be able to use");
+    expect(screen.getByRole("button", { name: "Revoke invitation" })).toBeInTheDocument();
   });
 });
 

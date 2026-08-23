@@ -25,6 +25,7 @@ struct MonthlyBudgetView: View {
                         shiftMonth(by: -1)
                     }
                     .labelStyle(.iconOnly)
+                    .frame(minWidth: 44, minHeight: 44)
                     Spacer()
                     Text(budgetMonthLabel(month))
                         .font(.headline)
@@ -34,6 +35,7 @@ struct MonthlyBudgetView: View {
                         shiftMonth(by: 1)
                     }
                     .labelStyle(.iconOnly)
+                    .frame(minWidth: 44, minHeight: 44)
                 }
             } footer: {
                 Text("Calendar month in \(workspace.timezone). Posted allocations determine usage; pending transactions are excluded.")
@@ -58,13 +60,7 @@ struct MonthlyBudgetView: View {
                 }
             } else if let plan = model.monthlyBudget, plan.month == month {
                 MonthlyBudgetUsageSections(plan: plan)
-                if canManage {
-                    Section {
-                        Button("Edit complete plan", systemImage: "pencil") {
-                            editorPresented = true
-                        }
-                    }
-                } else {
+                if !canManage {
                     viewerSection
                 }
             } else {
@@ -83,8 +79,19 @@ struct MonthlyBudgetView: View {
                 if !canManage { viewerSection }
             }
         }
-        .navigationTitle("Monthly budget")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationTitle("Budget")
+        .toolbar {
+            if canManage && !model.isLoadingBudget && model.budgetErrorMessage == nil {
+                ToolbarItem(placement: .primaryAction) {
+                    Button(
+                        displayedPlan == nil ? "Create monthly plan" : "Edit monthly plan",
+                        systemImage: displayedPlan == nil ? "plus" : "pencil"
+                    ) {
+                        editorPresented = true
+                    }
+                }
+            }
+        }
         .task(id: month) {
             await model.loadMonthlyBudget(workspaceID: workspace.id, month: month)
         }
@@ -111,6 +118,11 @@ struct MonthlyBudgetView: View {
         }
     }
 
+    private var displayedPlan: MonthlyBudgetPlan? {
+        guard let plan = model.monthlyBudget, plan.month == month else { return nil }
+        return plan
+    }
+
     private func reload() {
         Task { await model.loadMonthlyBudget(workspaceID: workspace.id, month: month) }
     }
@@ -128,13 +140,31 @@ private struct MonthlyBudgetUsageSections: View {
 
     var body: some View {
         Section {
-            Text(plan.name)
-                .font(.headline)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 12)], spacing: 8) {
-                BudgetSummaryValue(title: "Planned", amount: plan.plannedBaseMinor, currency: plan.baseCurrency)
-                BudgetSummaryValue(title: "Used", amount: plan.usedBaseMinor, currency: plan.baseCurrency)
-                BudgetSummaryValue(title: "Remaining", amount: plan.remainingBaseMinor, currency: plan.baseCurrency)
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(plan.name)
+                        .font(.title3.weight(.semibold))
+                    Spacer(minLength: 12)
+                    BudgetUsageStateLabel(state: usage.state)
+                }
+                ProgressView(value: usage.progress)
+                    .tint(usageColor)
+                    .accessibilityLabel("Monthly budget usage")
+                    .accessibilityValue(
+                        "\(plan.baseCurrency.formatted(minorUnits: plan.usedBaseMinor)) used of "
+                        + plan.baseCurrency.formatted(minorUnits: plan.plannedBaseMinor)
+                    )
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 12)], spacing: 8) {
+                    BudgetSummaryValue(title: "Planned", amount: plan.plannedBaseMinor, currency: plan.baseCurrency)
+                    BudgetSummaryValue(title: "Used", amount: plan.usedBaseMinor, currency: plan.baseCurrency)
+                    BudgetSummaryValue(title: "Remaining", amount: plan.remainingBaseMinor, currency: plan.baseCurrency)
+                }
             }
+            .padding(18)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
+            .accessibilityElement(children: .contain)
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color.clear)
         } header: {
             Text("Posted usage")
         } footer: {
@@ -143,26 +173,15 @@ private struct MonthlyBudgetUsageSections: View {
 
         Section("Category progress") {
             ForEach(plan.items) { item in
+                let itemUsage = BudgetUsagePresentation(
+                    planned: item.plannedBaseMinor,
+                    used: item.usedBaseMinor,
+                    remaining: item.remainingBaseMinor
+                )
                 VStack(alignment: .leading, spacing: 7) {
-                    HStack(alignment: .firstTextBaseline) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text((item.categoryIcon.map { "\($0) " } ?? "") + item.categoryName)
-                                .font(.headline)
-                            Text((item.categoryArchivedAt == nil ? "" : "Archived · ") + "Includes subcategories")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer(minLength: 12)
-                        VStack(alignment: .trailing, spacing: 3) {
-                            Text(plan.baseCurrency.formatted(minorUnits: item.usedBaseMinor))
-                                .font(.subheadline.monospacedDigit())
-                            Text("of \(plan.baseCurrency.formatted(minorUnits: item.plannedBaseMinor))")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
+                    BudgetItemHeader(plan: plan, item: item)
                     ProgressView(value: progress(item))
-                        .tint(item.remainingBaseMinor < 0 ? .red : .green)
+                        .tint(color(itemUsage.state))
                         .accessibilityLabel("\(item.categoryName) budget usage")
                         .accessibilityValue(
                             "\(plan.baseCurrency.formatted(minorUnits: item.usedBaseMinor)) of "
@@ -170,7 +189,14 @@ private struct MonthlyBudgetUsageSections: View {
                         )
                     Text("\(plan.baseCurrency.formatted(minorUnits: item.remainingBaseMinor)) remaining")
                         .font(.caption.monospacedDigit())
-                        .foregroundStyle(item.remainingBaseMinor < 0 ? .red : .secondary)
+                        .foregroundStyle(
+                            itemUsage.state == .overspent ? Color.red : Color.secondary
+                        )
+                    if itemUsage.state == .refundCredit {
+                        Text("Refund credit reduces posted usage")
+                            .font(.caption)
+                            .foregroundStyle(.green)
+                    }
                 }
                 .padding(.vertical, 4)
                 .accessibilityElement(children: .contain)
@@ -178,9 +204,108 @@ private struct MonthlyBudgetUsageSections: View {
         }
     }
 
+    private var usage: BudgetUsagePresentation {
+        BudgetUsagePresentation(
+            planned: plan.plannedBaseMinor,
+            used: plan.usedBaseMinor,
+            remaining: plan.remainingBaseMinor
+        )
+    }
+
+    private var usageColor: Color { color(usage.state) }
+
     private func progress(_ item: MonthlyBudgetItem) -> Double {
-        guard item.plannedBaseMinor > 0 else { return 0 }
-        return min(1, max(0, Double(item.usedBaseMinor) / Double(item.plannedBaseMinor)))
+        BudgetUsagePresentation(
+            planned: item.plannedBaseMinor,
+            used: item.usedBaseMinor,
+            remaining: item.remainingBaseMinor
+        ).progress
+    }
+
+    private func color(_ state: BudgetUsageState) -> Color {
+        switch state {
+        case .noTarget: .secondary
+        case .onTrack: .green
+        case .overspent: .red
+        case .refundCredit: .mint
+        }
+    }
+}
+
+private struct BudgetItemHeader: View {
+    let plan: MonthlyBudgetPlan
+    let item: MonthlyBudgetItem
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline) {
+                category
+                Spacer(minLength: 12)
+                amounts
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                category
+                amounts
+            }
+        }
+    }
+
+    private var category: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text((item.categoryIcon.map { "\($0) " } ?? "") + item.categoryName)
+                .font(.headline)
+            Text((item.categoryArchivedAt == nil ? "" : "Archived · ") + "Includes subcategories")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var amounts: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(plan.baseCurrency.formatted(minorUnits: item.usedBaseMinor))
+                .font(.subheadline.monospacedDigit())
+            Text("of \(plan.baseCurrency.formatted(minorUnits: item.plannedBaseMinor))")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct BudgetUsageStateLabel: View {
+    let state: BudgetUsageState
+
+    var body: some View {
+        Label(title, systemImage: systemImage)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(color)
+            .labelStyle(.titleAndIcon)
+    }
+
+    private var title: String {
+        switch state {
+        case .noTarget: "No target"
+        case .onTrack: "On track"
+        case .overspent: "Over plan"
+        case .refundCredit: "Refund credit"
+        }
+    }
+
+    private var systemImage: String {
+        switch state {
+        case .noTarget: "minus.circle"
+        case .onTrack: "checkmark.circle.fill"
+        case .overspent: "exclamationmark.circle.fill"
+        case .refundCredit: "arrow.uturn.backward.circle.fill"
+        }
+    }
+
+    private var color: Color {
+        switch state {
+        case .noTarget: .secondary
+        case .onTrack: .green
+        case .overspent: .red
+        case .refundCredit: .mint
+        }
     }
 }
 
@@ -291,6 +416,7 @@ private struct MonthlyBudgetEditorView: View {
                     }
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle(plan == nil ? "Create monthly plan" : "Edit monthly plan")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

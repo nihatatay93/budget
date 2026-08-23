@@ -1,18 +1,22 @@
 import { useQuery } from "@tanstack/react-query";
 import { type FormEvent, useState } from "react";
+import { Link } from "react-router-dom";
 
 import {
   APIError,
   type FinancialProjection,
   type FinancialProjectionRange,
-  type MonthlyBudget,
   financialProjectionQueryKey,
   getFinancialProjection,
-  getMonthlyBudget,
-  monthlyBudgetQueryKey,
 } from "../../api/client";
+import {
+  EmptyState,
+  InlineNotice,
+  LoadingState,
+  MoneyAmount,
+  StatusBadge,
+} from "../../components/Presentation";
 import { type Currency, formatMoney } from "../../lib/currency";
-import { monthLabel, workspaceMonth } from "../../lib/month";
 
 type Workspace = {
   id: string;
@@ -29,12 +33,6 @@ export function FinancialDashboard({ workspace }: { workspace: Workspace }) {
   const query = useQuery({
     queryKey: financialProjectionQueryKey(workspace.id, range),
     queryFn: () => getFinancialProjection(workspace.id, range),
-  });
-  const currentMonth = workspaceMonth(workspace.timezone);
-  const budget = useQuery({
-    queryKey: monthlyBudgetQueryKey(workspace.id, currentMonth),
-    queryFn: () => getMonthlyBudget(workspace.id, currentMonth),
-    retry: false,
   });
 
   function applyRange(event: FormEvent) {
@@ -83,23 +81,19 @@ export function FinancialDashboard({ workspace }: { workspace: Workspace }) {
               onChange={(event) => setToDate(event.target.value)}
             />
           </label>
-          <button className="secondary-button" type="submit">Apply</button>
+          <button className="secondary-button" type="submit">Apply range</button>
           {range ? (
             <button className="text-button" type="button" onClick={resetRange}>
-              Month to date
+              Current month
             </button>
           ) : null}
         </form>
       </div>
       {rangeError ? <p className="form-error" role="alert">{rangeError}</p> : null}
-      {query.isLoading ? <p className="resource-state">Loading financial overview…</p> : null}
+      {query.isLoading ? <LoadingState label="Loading financial report" rows={6} /> : null}
       {query.isError ? <ProjectionError error={query.error} retry={() => query.refetch()} /> : null}
       {query.data ? (
-        <ProjectionContent
-          projection={query.data}
-          budget={budget.data}
-          budgetMissing={budget.error instanceof APIError && budget.error.status === 404}
-        />
+        <ProjectionContent projection={query.data} workspaceId={workspace.id} />
       ) : null}
     </section>
   );
@@ -107,12 +101,10 @@ export function FinancialDashboard({ workspace }: { workspace: Workspace }) {
 
 function ProjectionContent({
   projection,
-  budget,
-  budgetMissing,
+  workspaceId,
 }: {
   projection: FinancialProjection;
-  budget?: MonthlyBudget;
-  budgetMissing: boolean;
+  workspaceId: string;
 }) {
   const currency = projection.period.base_currency;
   const expenseCategories = projection.categories.filter((category) => category.kind === "expense");
@@ -144,16 +136,8 @@ function ProjectionContent({
           pendingLabel="Pending spending"
         />
       </div>
-      {budget ? <CurrentBudgetProgress budget={budget} /> : null}
-      {budgetMissing ? (
-        <div className="current-budget-empty">
-          <div>
-            <strong>No plan for the current month</strong>
-            <small>Set category targets to compare posted spending with your plan.</small>
-          </div>
-          <a href="#monthly-budget-heading">Create monthly budget</a>
-        </div>
-      ) : null}
+      <IncomeSpendingComparison projection={projection} />
+      <ReportHelp workspaceId={workspaceId} />
       <div className="projection-detail-grid">
         <section className="projection-detail" aria-labelledby="projection-accounts-heading">
           <div className="projection-detail-heading">
@@ -161,10 +145,15 @@ function ProjectionContent({
               <p className="eyebrow">Cumulative through period end</p>
               <h3 id="projection-accounts-heading">Account balances</h3>
             </div>
-            <a href="#accounts-heading">Manage accounts</a>
+            <Link to={`/workspaces/${workspaceId}/accounts`}>Manage accounts</Link>
           </div>
           {projection.accounts.length === 0 ? (
-            <p className="resource-state">No accounts yet.</p>
+            <EmptyState
+              compact
+              description="Create an account before recording financial activity."
+              icon="accounts"
+              title="No accounts yet"
+            />
           ) : (
             <div className="projection-list">
               {projection.accounts.map((account) => (
@@ -199,7 +188,7 @@ function ProjectionContent({
               <p className="eyebrow">Selected period</p>
               <h3 id="projection-categories-heading">Category activity</h3>
             </div>
-            <a href="#transactions-heading">Review transactions</a>
+            <Link to={`/workspaces/${workspaceId}/transactions`}>Review transactions</Link>
           </div>
           <CategoryGroup
             categories={expenseCategories}
@@ -219,27 +208,103 @@ function ProjectionContent({
   );
 }
 
-function CurrentBudgetProgress({ budget }: { budget: MonthlyBudget }) {
-  const progress = budget.planned_base_minor > 0
-    ? Math.max(0, Math.min(100, budget.used_base_minor / budget.planned_base_minor * 100))
-    : 0;
+function IncomeSpendingComparison({ projection }: { projection: FinancialProjection }) {
+  const currency = projection.period.base_currency;
+  const income = projection.summary.income_base_minor.posted;
+  const spending = projection.summary.spending_base_minor.posted;
+  const maximum = Math.max(Math.abs(income), Math.abs(spending), 1);
+  const net = income - spending;
   return (
-    <section className="current-budget-progress" aria-labelledby="current-budget-progress-heading">
+    <section className="report-comparison" aria-labelledby="report-comparison-heading">
       <div>
-        <p className="eyebrow">{monthLabel(budget.month)} plan</p>
-        <h3 id="current-budget-progress-heading">{budget.name}</h3>
-        <small>Posted category allocations only</small>
+        <p className="eyebrow">Selected period</p>
+        <h3 id="report-comparison-heading">Income and spending</h3>
+        <p>Posted allocations only. Transfers and pending activity stay outside these totals.</p>
       </div>
-      <div className="current-budget-meter">
-        <div>
-          <strong>{formatMoney(budget.used_base_minor, budget.base_currency)} used</strong>
-          <span>{formatMoney(budget.remaining_base_minor, budget.base_currency)} remaining</span>
-        </div>
-        <progress aria-label="Current monthly budget usage" max={100} value={progress} />
-        <span>of {formatMoney(budget.planned_base_minor, budget.base_currency)} planned</span>
+      <div className="report-comparison-bars">
+        <ReportBar amount={income} currency={currency} label="Income" maximum={maximum} tone="income" />
+        <ReportBar amount={spending} currency={currency} label="Spending" maximum={maximum} tone="spending" />
       </div>
-      <a href="#monthly-budget-heading">Review budget</a>
+      <div className="report-net-result">
+        <StatusBadge tone={net >= 0 ? "positive" : "warning"}>Net cash flow</StatusBadge>
+        <strong><MoneyAmount amount={net} currency={currency} signed /></strong>
+      </div>
     </section>
+  );
+}
+
+function ReportBar({ amount, currency, label, maximum, tone }: {
+  amount: number;
+  currency: Currency;
+  label: string;
+  maximum: number;
+  tone: "income" | "spending";
+}) {
+  const width = Math.abs(amount) / maximum * 100;
+  return (
+    <div className="report-bar-row">
+      <div>
+        <span>{label}</span>
+        <strong><MoneyAmount amount={amount} currency={currency} /></strong>
+      </div>
+      <div
+        aria-label={`${label}: ${formatMoney(amount, currency)}`}
+        className="report-bar-track"
+        role="img"
+      >
+        <span className={`report-bar-fill report-bar-${tone}`} style={{ width: `${width}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function CategoryVisual({
+  amount,
+  currency,
+  label,
+  maximum,
+}: {
+  amount: number;
+  currency: Currency;
+  label: string;
+  maximum: number;
+}) {
+  return (
+    <div
+      aria-label={`${label}: ${formatMoney(amount, currency)}`}
+      className="category-activity-track"
+      role="img"
+    >
+      <span style={{ width: `${maximum > 0 ? Math.abs(amount) / maximum * 100 : 0}%` }} />
+    </div>
+  );
+}
+
+function ReportReadout({
+  amount,
+  currency,
+  pending,
+}: {
+  amount: number;
+  currency: Currency;
+  pending: number;
+}) {
+  return (
+    <div className="projection-amount">
+      <strong>{formatMoney(amount, currency)}</strong>
+      {pending !== 0 ? <small>{signedMoney(pending, currency)} pending</small> : null}
+    </div>
+  );
+}
+
+function ReportHelp({ workspaceId }: { workspaceId: string }) {
+  return (
+    <InlineNotice
+      action={<Link to={`/workspaces/${workspaceId}/budget`}>Review monthly plan</Link>}
+      title="Reports explain what happened"
+    >
+      <p>Use Budget to plan category targets; this view stays focused on ledger-derived results.</p>
+    </InlineNotice>
   );
 }
 
@@ -257,7 +322,7 @@ function SummaryCard({
   return (
     <article className="projection-summary-card">
       <span>{label}</span>
-      <strong>{formatMoney(amounts.posted, currency)}</strong>
+      <strong><MoneyAmount amount={amounts.posted} currency={currency} /></strong>
       <small>Posted</small>
       <div>
         <span>{pendingLabel}</span>
@@ -265,7 +330,7 @@ function SummaryCard({
       </div>
       <div>
         <span>Projected total</span>
-        <b>{formatMoney(amounts.projected, currency)}</b>
+        <b><MoneyAmount amount={amounts.projected} currency={currency} /></b>
       </div>
     </article>
   );
@@ -285,6 +350,10 @@ function CategoryGroup({
   const active = categories.filter(
     (category) => category.rolled_up_base_minor.posted !== 0 || category.rolled_up_base_minor.pending !== 0,
   );
+  const maximum = Math.max(
+    ...active.map((category) => Math.abs(category.rolled_up_base_minor.posted)),
+    1,
+  );
   return (
     <div className="category-report">
       <h4>{label}</h4>
@@ -300,11 +369,18 @@ function CategoryGroup({
               {category.archived_at ? " · archived" : ""}
             </small>
           </div>
-          <div className="projection-amount">
-            <strong>{formatMoney(category.rolled_up_base_minor.posted, currency)}</strong>
-            {category.rolled_up_base_minor.pending !== 0 ? (
-              <small>{signedMoney(category.rolled_up_base_minor.pending, currency)} pending</small>
-            ) : null}
+          <div className="projection-category-value">
+            <CategoryVisual
+              amount={category.rolled_up_base_minor.posted}
+              currency={currency}
+              label={`${category.name} posted ${label.toLowerCase()}`}
+              maximum={maximum}
+            />
+            <ReportReadout
+              amount={category.rolled_up_base_minor.posted}
+              currency={currency}
+              pending={category.rolled_up_base_minor.pending}
+            />
           </div>
         </article>
       ))}
