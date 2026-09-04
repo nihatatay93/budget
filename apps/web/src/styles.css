@@ -2096,8 +2096,60 @@ a {
   box-shadow: var(--shadow-sm);
   display: grid;
   gap: 0.65rem;
-  grid-template-columns: minmax(15rem, 1fr) auto auto auto;
+  grid-template-columns: minmax(15rem, 1fr) auto auto;
   padding: 0.75rem;
+}
+
+/* One filter control beside the search field, matching the single filter menu on iOS. */
+.transaction-filter {
+  position: relative;
+}
+
+.transaction-filter > summary {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  font-size: 0.82rem;
+  font-weight: 750;
+  gap: 0.45rem;
+  min-height: 2.75rem;
+  padding: 0.65rem 0.9rem;
+  white-space: nowrap;
+}
+
+.transaction-filter > summary:focus-visible {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 15%, transparent);
+  outline: 0;
+}
+
+.transaction-filter[open] > summary {
+  background: var(--surface-muted);
+}
+
+.transaction-filter-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  display: grid;
+  gap: 0.75rem;
+  inset-inline-end: 0;
+  min-width: 15rem;
+  padding: 0.9rem;
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  z-index: 5;
+}
+
+.transaction-filter-panel > label {
+  display: grid;
+  font-size: 0.72rem;
+  font-weight: 750;
+  gap: 0.3rem;
 }
 
 .transaction-toolbar select,
@@ -2125,7 +2177,9 @@ a {
 .transaction-search {
   align-items: center;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  /* The icon is positioned over the field rather than sitting beside it, so the input is the
+     only item here. A second column left it sized to its intrinsic width instead of the row. */
+  grid-template-columns: minmax(0, 1fr);
   position: relative;
 }
 
@@ -2172,6 +2226,31 @@ a {
   overflow: hidden;
 }
 
+/* The date heads its day once, so no row has to repeat it. */
+.transaction-day-heading {
+  align-items: baseline;
+  background: var(--surface-muted);
+  border-top: 1px solid var(--border);
+  color: var(--ink-subtle);
+  display: flex;
+  font-size: 0.72rem;
+  font-weight: 750;
+  gap: 0.75rem;
+  justify-content: space-between;
+  letter-spacing: 0.02em;
+  margin: 0;
+  padding: 0.5rem 1rem;
+}
+
+.transaction-day:first-child .transaction-day-heading {
+  border-top: 0;
+}
+
+.transaction-day-heading .money-amount {
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
 .transaction-register-row {
   align-items: center;
   border-top: 1px solid var(--border);
@@ -2179,10 +2258,6 @@ a {
   gap: 0.85rem;
   grid-template-columns: auto minmax(0, 1fr) minmax(7rem, auto) auto;
   padding: 0.9rem 1rem;
-}
-
-.transaction-register-row:first-child {
-  border-top: 0;
 }
 
 .transaction-register-row:hover {
@@ -2273,6 +2348,320 @@ a {
 .transaction-editor-form .transaction-line > button {
   grid-column: 1 / -1;
   justify-self: start;
+}
+
+/* Everyday capture: one unsigned amount and one category, with the ledger derived from them. */
+.transaction-capture {
+  display: grid;
+  gap: 1rem;
+}
+
+.capture-type {
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  display: grid;
+  gap: 0.3rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 0.35rem;
+}
+
+.capture-type legend {
+  color: var(--ink-subtle);
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  padding: 0 0.35rem;
+  text-transform: uppercase;
+}
+
+.transaction-editor-form .capture-type input {
+  height: 1px;
+  min-height: 0;
+  opacity: 0;
+  padding: 0;
+  position: absolute;
+  width: 1px;
+}
+
+.capture-type label {
+  display: block;
+  position: relative;
+}
+
+.capture-type span {
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: block;
+  font-weight: 700;
+  padding: 0.6rem 0.5rem;
+  text-align: center;
+}
+
+.capture-type input:checked + span {
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  color: var(--primary-ink);
+}
+
+.capture-type input:focus-visible + span {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.transaction-editor-form .capture-columns {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* The base-currency field only appears for a foreign account, so the amount takes the whole
+   row on its own and shares it when that second field is there. */
+.transaction-editor-form .capture-amount-row {
+  display: grid;
+  gap: 0.75rem;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+}
+
+.capture-amount-field {
+  align-items: center;
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.capture-amount-field > span {
+  color: var(--ink-subtle);
+  font-size: 0.85rem;
+  font-weight: 750;
+}
+
+.transaction-editor-form .capture-amount input {
+  font-size: 1.35rem;
+  font-weight: 750;
+  min-height: 3.25rem;
+}
+
+.capture-category-preview {
+  margin: 0;
+}
+
+.capture-date-shortcuts {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.capture-more {
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+}
+
+.capture-more summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 750;
+}
+
+.capture-more[open] summary {
+  margin-bottom: 0.85rem;
+}
+
+.transaction-editor-form .capture-more > label,
+.transaction-editor-form .capture-more > .inline-notice,
+.transaction-editor-form .capture-more > button {
+  margin-top: 0.75rem;
+}
+
+.transaction-editor-form .capture-checkbox {
+  align-items: center;
+  display: flex;
+  gap: 0.6rem;
+}
+
+.transaction-editor-form .capture-checkbox input {
+  height: 1.15rem;
+  min-height: 0;
+  width: 1.15rem;
+}
+
+@media (max-width: 40rem) {
+  .transaction-editor-form .capture-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .transaction-editor-form .capture-amount-row {
+    grid-auto-flow: row;
+  }
+}
+
+/* Categories as coloured sections of tiles, so a hierarchy can be scanned rather than read. */
+.category-sections {
+  display: grid;
+  gap: 1.1rem;
+}
+
+.category-section-heading {
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  padding-bottom: 0.4rem;
+}
+
+.category-section-heading h3 {
+  font-size: 0.95rem;
+  font-weight: 750;
+  margin: 0;
+}
+
+.category-section-toggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--ink-faint);
+  display: flex;
+  min-height: 2.2rem;
+  min-width: 2.2rem;
+  justify-content: center;
+  padding: 0;
+}
+
+.category-section-toggle:hover:not(:disabled) {
+  background: var(--surface-muted);
+  color: var(--ink);
+}
+
+.category-tiles {
+  display: grid;
+  gap: 0.5rem 0.35rem;
+  /* Four to a row at every width, as in the reference application. A fixed count keeps a
+     section's shape recognizable instead of reflowing differently on each screen. */
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding-top: 0.85rem;
+}
+
+.category-tile {
+  /* The columns stretch with the page; the tile itself stops growing and centres in its
+     column, so a wide screen spaces the tiles out rather than inflating them. */
+  justify-self: center;
+  max-width: 9rem;
+  width: 100%;
+}
+
+.category-tile {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--ink);
+  display: grid;
+  gap: 0.4rem;
+  justify-items: center;
+  min-height: 5.4rem;
+  padding: 0.6rem 0.35rem;
+  text-align: center;
+}
+
+button.category-tile {
+  cursor: pointer;
+}
+
+button.category-tile:hover {
+  background: var(--surface-muted);
+}
+
+.category-tile > span {
+  /* Two lines, broken between words. Breaking inside one turns Subscriptions into
+     "Subscription/s", which is harder to scan than a truncated name. */
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  display: -webkit-box;
+  font-size: 0.72rem;
+  hyphens: auto;
+  line-height: 1.25;
+  overflow: hidden;
+}
+
+.category-tile .category-appearance-icon {
+  height: 3rem;
+  width: 3rem;
+}
+
+/* A nested category is one visual step in, and no more: a picker that indents four levels
+   stops being scannable, which is the whole point of tiles. */
+.category-tile-nested .category-appearance-icon {
+  height: 2.5rem;
+  width: 2.5rem;
+}
+
+.category-tile-selected {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+}
+
+.category-tile:focus-visible {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 15%, transparent);
+  outline: 0;
+}
+
+.category-sections-empty {
+  color: var(--ink-subtle);
+  margin: 0;
+}
+
+.category-picker-search input,
+.capture-category-button {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  min-height: 2.75rem;
+  padding: 0.65rem 0.75rem;
+  width: 100%;
+}
+
+.category-picker-search {
+  display: block;
+  margin-bottom: 0.85rem;
+}
+
+.category-uncategorized {
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  color: var(--ink);
+  margin-bottom: 1.1rem;
+  width: 100%;
+}
+
+.capture-category {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.capture-category > span {
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.capture-category-button {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 0.6rem;
+  justify-content: space-between;
+  text-align: start;
+}
+
+.capture-category-button > span:last-child {
+  color: var(--primary-ink);
+  font-size: 0.75rem;
+  font-weight: 750;
 }
 
 .danger-button {
@@ -2767,10 +3156,12 @@ a {
   padding: 0;
 }
 
+/* Expense and income stack rather than sharing the width, so a section of tiles gets the whole
+   row to spread across instead of being squeezed into half of it. */
 .category-kind-grid {
   display: grid;
   gap: 0.8rem;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .category-kind-card {
@@ -2837,6 +3228,28 @@ a {
 .category-hierarchy-row small {
   display: block;
 }
+
+.category-label { align-items: center; display: inline-flex; gap: 0.5rem; min-width: 0; }
+/* A category badge is solid, with a white glyph: the colour is what identifies a category at a
+   glance in a grid of them, and a tint that pale reads as disabled at tile size. Every accent in
+   the palette clears 3:1 against white, which is the bar for a graphic that carries meaning. */
+.category-appearance-icon { align-items: center; background: var(--category-accent); border-radius: 0.65rem; color: #fff; display: inline-flex; flex: 0 0 auto; height: 1.85rem; justify-content: center; width: 1.85rem; }
+.category-emoji { font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; font-size: 1.05rem; line-height: 1; }
+.category-appearance-editor { border: 1px solid var(--border); border-radius: var(--radius-md); display: grid; gap: 0.9rem; margin: 0; padding: 1rem; }
+.category-appearance-editor legend { font-weight: 800; padding: 0 0.35rem; }
+.category-preview { align-items: center; background: color-mix(in srgb, var(--category-soft) 38%, var(--surface)); border: 1px solid color-mix(in srgb, var(--category-accent) 18%, var(--border)); border-radius: var(--radius-sm); display: flex; gap: 0.65rem; padding: 0.75rem; }
+.category-appearance-tabs { display: flex; gap: 0.45rem; }
+.category-appearance-tabs button { min-height: 2.25rem; padding: 0.45rem 0.8rem; }
+.category-appearance-tabs button[aria-pressed="true"] { background: var(--primary); color: white; }
+.category-system-picker, .category-emoji-picker { display: grid; gap: 0.65rem; }
+.category-icon-search input { width: 100%; }
+.category-icon-grid, .category-emoji-palette, .category-color-picker { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+.category-icon-choice, .category-emoji-choice, .category-color-choice { align-items: center; background: var(--surface-muted); border: 1px solid var(--border); border-radius: 0.7rem; color: var(--ink); display: inline-flex; height: 2.55rem; justify-content: center; min-height: 0; padding: 0.35rem; width: 2.55rem; }
+.category-icon-choice:hover:not(:disabled), .category-emoji-choice:hover:not(:disabled), .category-color-choice:hover:not(:disabled) { background: var(--category-soft, var(--surface-muted)); }
+.category-icon-choice[aria-pressed="true"], .category-emoji-choice[aria-pressed="true"], .category-color-choice[aria-pressed="true"] { border: 2px solid var(--category-accent, var(--primary)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--category-accent, var(--primary)) 20%, transparent); }
+.category-emoji-choice { font-size: 1.2rem; }
+.category-emoji-picker > span { color: var(--ink-faint); font-size: 0.78rem; }
+.category-color-choice span { background: var(--category-accent); border-radius: inherit; height: 1.25rem; width: 1.25rem; }
 
 .category-hierarchy-row small {
   color: var(--ink-faint);
@@ -3144,14 +3557,6 @@ a {
     grid-column: 1 / -1;
   }
 
-  .transaction-toolbar {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .transaction-search {
-    grid-column: 1 / -1;
-  }
-
   .account-card-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -3326,11 +3731,10 @@ a {
   }
 
   .transaction-toolbar {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: auto minmax(0, 1fr);
   }
 
-  .transaction-search,
-  .transaction-toolbar > button {
+  .transaction-search {
     grid-column: 1 / -1;
   }
 
@@ -3668,4 +4072,802 @@ a {
   overflow-wrap: anywhere;
   font-size: 0.95rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Spending analysis
+   ------------------------------------------------------------------
+   The analysis destination is chart-heavy, so it introduces one small palette of its own for
+   marks. Everything else reuses the existing surfaces, radii, and type scale, which is what
+   keeps a page full of graphics reading as the same product. */
+
+:root {
+  --chart-spending: #ca7a38;
+  --chart-income: #176b4a;
+  --chart-net: #39759a;
+  --chart-grid: color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.analysis-dashboard {
+  display: grid;
+  gap: clamp(1rem, 2.5vw, 1.5rem);
+}
+
+.analysis-controls {
+  display: grid;
+  gap: 1.15rem;
+}
+
+.analysis-controls-intro h2 {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.5rem, 3.5vw, 2.1rem);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  margin: 0 0 0.4rem;
+}
+
+.analysis-controls-intro p:last-child {
+  color: var(--ink-subtle);
+  font-size: 0.85rem;
+  margin: 0;
+  max-width: 58ch;
+}
+
+.analysis-control-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: space-between;
+}
+
+.segmented-control {
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.15rem;
+  padding: 0.25rem;
+}
+
+.segmented-option {
+  background: transparent;
+  border-radius: 999px;
+  color: var(--ink-subtle);
+  font-size: 0.78rem;
+  font-weight: 700;
+  min-height: 2.1rem;
+  padding: 0.4rem 0.85rem;
+}
+
+.segmented-option:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  box-shadow: none;
+  color: var(--ink);
+  transform: none;
+}
+
+.segmented-option.active {
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  color: var(--primary-ink);
+}
+
+.segmented-control-quiet .segmented-option {
+  font-size: 0.74rem;
+  padding: 0.35rem 0.7rem;
+}
+
+.analysis-custom-range {
+  align-items: end;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding-top: 1rem;
+}
+
+.analysis-custom-range label {
+  color: var(--ink-subtle);
+  display: grid;
+  font-size: 0.72rem;
+  font-weight: 800;
+  gap: 0.3rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.analysis-custom-range input {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  min-height: 2.6rem;
+  padding: 0.5rem 0.7rem;
+}
+
+.analysis-loading {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.analysis-loading-grid {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+}
+
+.analysis-summary {
+  display: grid;
+  gap: clamp(0.75rem, 2vw, 1.25rem);
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 2fr);
+}
+
+.analysis-headline {
+  background:
+    radial-gradient(circle at 100% 0%, rgba(202, 122, 56, 0.22), transparent 15rem),
+    var(--surface-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  color: white;
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+  padding: clamp(1.15rem, 3vw, 1.65rem);
+}
+
+.analysis-headline-top {
+  align-items: start;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.analysis-headline-top p {
+  color: rgba(255, 255, 255, 0.66);
+  font-size: 0.78rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.analysis-headline-top span {
+  color: rgba(255, 255, 255, 0.42);
+  display: block;
+  font-size: 0.75rem;
+  margin-top: 0.15rem;
+}
+
+.analysis-headline h3 {
+  margin: 0;
+}
+
+.analysis-metric-grid {
+  display: grid;
+  gap: clamp(0.75rem, 2vw, 1.25rem);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.analysis-metric-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  display: grid;
+  align-content: start;
+  gap: 0.3rem;
+  padding: clamp(0.9rem, 2vw, 1.15rem);
+}
+
+.analysis-metric-card p {
+  color: var(--ink-subtle);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.analysis-metric-card strong {
+  font-size: 1.35rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.analysis-metric-card small {
+  color: var(--ink-faint);
+  font-size: 0.75rem;
+}
+
+.delta-chip {
+  align-items: baseline;
+  border-radius: 999px;
+  display: inline-flex;
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  gap: 0.4rem;
+  justify-self: start;
+  margin-top: 0.2rem;
+  padding: 0.3rem 0.65rem;
+}
+
+.delta-chip small {
+  font-weight: 600;
+  opacity: 0.78;
+}
+
+.delta-chip-positive {
+  background: var(--primary-soft);
+  color: var(--primary-ink);
+}
+
+.delta-chip-warning {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.delta-chip-neutral {
+  background: var(--surface-muted);
+  color: var(--ink-subtle);
+}
+
+.analysis-headline .delta-chip {
+  background: rgba(255, 255, 255, 0.13);
+  color: rgba(255, 255, 255, 0.94);
+}
+
+.analysis-panel-heading {
+  align-items: start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.analysis-panel-heading h3 {
+  font-size: 1.15rem;
+  margin: 0;
+}
+
+.analysis-panel-heading > div > p:last-child {
+  color: var(--ink-subtle);
+  font-size: 0.8rem;
+  margin: 0.3rem 0 0;
+  max-width: 48ch;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.chart-legend-toggle {
+  align-items: center;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--ink-faint);
+  display: inline-flex;
+  font-size: 0.75rem;
+  font-weight: 750;
+  gap: 0.4rem;
+  min-height: 2rem;
+  padding: 0.3rem 0.7rem;
+}
+
+.chart-legend-toggle i {
+  border-radius: 999px;
+  display: inline-block;
+  height: 0.55rem;
+  opacity: 0.35;
+  width: 0.55rem;
+}
+
+.chart-legend-toggle.active {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--ink);
+}
+
+.chart-legend-toggle.active i {
+  opacity: 1;
+}
+
+.chart-legend-toggle:hover:not(:disabled) {
+  box-shadow: none;
+  transform: none;
+}
+
+.chart-frame {
+  position: relative;
+}
+
+.trend-chart {
+  display: block;
+  height: auto;
+  inline-size: 100%;
+  overflow: visible;
+  touch-action: pan-y;
+}
+
+.trend-chart:focus-visible {
+  outline-offset: 6px;
+}
+
+.chart-gridline {
+  stroke: var(--chart-grid);
+  stroke-width: 1;
+}
+
+.chart-zero-line {
+  stroke: var(--border-strong);
+  stroke-dasharray: 3 4;
+  stroke-width: 1;
+}
+
+.chart-crosshair {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+
+.chart-line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.5;
+}
+
+.chart-axis-label {
+  fill: var(--ink-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-empty {
+  color: var(--ink-faint);
+  font-size: 0.85rem;
+  margin: 1.5rem 0;
+  text-align: center;
+}
+
+.chart-tooltip {
+  background: var(--surface-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  color: white;
+  display: grid;
+  font-size: 0.75rem;
+  gap: 0.25rem;
+  padding: 0.6rem 0.75rem;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  white-space: nowrap;
+  z-index: 5;
+}
+
+.chart-tooltip[data-align="center"] { transform: translateX(-50%); }
+.chart-tooltip[data-align="start"] { transform: translateX(0); }
+.chart-tooltip[data-align="end"] { transform: translateX(-100%); }
+
+.chart-tooltip strong {
+  font-size: 0.8rem;
+}
+
+.chart-tooltip span {
+  align-items: center;
+  display: flex;
+  gap: 0.4rem;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.chart-tooltip b {
+  font-variant-numeric: tabular-nums;
+  color: white;
+  margin-inline-start: auto;
+  padding-inline-start: 0.75rem;
+}
+
+.chart-tooltip i {
+  border-radius: 999px;
+  height: 0.5rem;
+  width: 0.5rem;
+}
+
+.insight-strip {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+}
+
+.insight-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-inline-start: 3px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: 0.9rem 1rem;
+}
+
+.insight-card strong {
+  display: block;
+  font-size: 0.9rem;
+  margin-bottom: 0.25rem;
+}
+
+.insight-card p {
+  color: var(--ink-subtle);
+  font-size: 0.8rem;
+  margin: 0;
+}
+
+.insight-card-positive { border-inline-start-color: var(--primary); }
+.insight-card-warning { border-inline-start-color: var(--accent); }
+.insight-card-danger { border-inline-start-color: var(--danger); }
+
+.analysis-split {
+  display: grid;
+  gap: clamp(0.75rem, 2vw, 1.25rem);
+  grid-template-columns: repeat(auto-fit, minmax(21rem, 1fr));
+}
+
+.donut-frame {
+  display: grid;
+  justify-items: center;
+  margin-bottom: 1rem;
+}
+
+.donut-chart {
+  height: auto;
+  inline-size: min(11rem, 60%);
+}
+
+.donut-track {
+  stroke: var(--surface-muted);
+  stroke-width: 16;
+}
+
+.donut-slice {
+  stroke-width: 16;
+}
+
+.donut-center-value {
+  fill: var(--ink);
+  font-size: 17px;
+  font-weight: 750;
+}
+
+.donut-center-label {
+  fill: var(--ink-faint);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.meter-bar {
+  background: var(--surface-muted);
+  border-radius: 999px;
+  block-size: 0.5rem;
+  display: block;
+  inline-size: 100%;
+  overflow: hidden;
+}
+
+.meter-bar > span {
+  block-size: 100%;
+  border-radius: inherit;
+  display: block;
+  min-inline-size: 0.2rem;
+}
+
+.sparkline {
+  block-size: 1.5rem;
+  inline-size: 4.5rem;
+}
+
+.sparkline path {
+  fill: none;
+  opacity: 0.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+}
+
+.category-ranking {
+  display: grid;
+  gap: 0.2rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.category-ranking-row {
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.6rem 0.5rem;
+}
+
+.category-ranking-row:hover {
+  background: var(--surface-muted);
+}
+
+.category-ranking-main {
+  align-items: center;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.category-ranking-rank {
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 850;
+  inline-size: 1.1rem;
+}
+
+.category-ranking-identity small {
+  color: var(--ink-faint);
+  display: block;
+  font-size: 0.72rem;
+  margin-top: 0.15rem;
+}
+
+.category-ranking-figures {
+  display: grid;
+  justify-items: end;
+}
+
+.category-ranking-figures small {
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.category-ranking-visual {
+  align-items: center;
+  display: grid;
+  gap: 0.6rem;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding-inline-start: 1.85rem;
+}
+
+.delta-inline {
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  min-inline-size: 3.2rem;
+  text-align: end;
+}
+
+.delta-inline-up { color: var(--accent); }
+.delta-inline-down { color: var(--primary); }
+.delta-inline-flat,
+.delta-inline-neutral { color: var(--ink-faint); }
+
+.category-ranking-expand {
+  justify-self: start;
+  margin-inline-start: 1.5rem;
+}
+
+.category-subcategories {
+  display: grid;
+  gap: 0.35rem;
+  list-style: none;
+  margin: 0;
+  padding: 0.25rem 0 0.25rem 1.85rem;
+}
+
+.category-subcategories li {
+  align-items: center;
+  color: var(--ink-subtle);
+  display: flex;
+  font-size: 0.8rem;
+  gap: 1rem;
+  justify-content: space-between;
+}
+
+.category-ranking-remainder {
+  color: var(--ink-faint);
+  font-size: 0.78rem;
+  margin: 0.75rem 0 0;
+}
+
+.weekday-chart {
+  display: grid;
+  gap: 0.45rem;
+  list-style: none;
+  margin: 0 0 1.25rem;
+  padding: 0;
+}
+
+.weekday-chart li {
+  align-items: center;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: 2.5rem minmax(0, 1fr) auto;
+}
+
+.weekday-chart-label {
+  color: var(--ink-subtle);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.weekday-chart-value {
+  color: var(--ink-subtle);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  min-inline-size: 3.5rem;
+  text-align: end;
+}
+
+.analysis-subheading {
+  color: var(--ink-subtle);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  margin: 0 0 0.6rem;
+  text-transform: uppercase;
+}
+
+.heatmap {
+  display: flex;
+  gap: 0.35rem;
+  overflow-x: auto;
+  padding-bottom: 0.35rem;
+}
+
+.heatmap-weekdays {
+  display: grid;
+  flex: none;
+  gap: 0.2rem;
+  grid-template-rows: repeat(7, 0.85rem);
+}
+
+.heatmap-weekdays span {
+  align-items: center;
+  color: var(--ink-faint);
+  display: flex;
+  font-size: 0.6rem;
+  font-weight: 800;
+}
+
+.heatmap-columns {
+  display: flex;
+  gap: 0.2rem;
+}
+
+.heatmap-column {
+  display: grid;
+  gap: 0.2rem;
+  grid-template-rows: repeat(7, 0.85rem);
+}
+
+.heatmap-cell {
+  background: var(--chart-spending);
+  block-size: 0.85rem;
+  border-radius: 0.22rem;
+  display: block;
+  inline-size: 0.85rem;
+}
+
+.heatmap-cell[data-empty="true"] {
+  background: var(--surface-muted);
+}
+
+.heatmap-cell-outside {
+  background: transparent;
+}
+
+.analysis-legend {
+  align-items: center;
+  color: var(--ink-faint);
+  display: flex;
+  font-size: 0.7rem;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin: 0.6rem 0 0;
+}
+
+.analysis-legend-scale {
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--chart-spending) 18%, transparent),
+    var(--chart-spending)
+  );
+  border-radius: 999px;
+  display: inline-block;
+  height: 0.5rem;
+  width: 5rem;
+}
+
+.payee-list,
+.account-activity-list {
+  display: grid;
+  gap: 0.65rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.payee-list li,
+.account-activity-list li {
+  align-items: center;
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: minmax(7rem, 1.3fr) minmax(4rem, 1fr) auto;
+}
+
+.payee-list small,
+.account-activity-list small {
+  color: var(--ink-faint);
+  display: block;
+  font-size: 0.72rem;
+  margin-top: 0.1rem;
+}
+
+.account-activity-figures {
+  display: grid;
+  justify-items: end;
+}
+
+.analysis-footnote {
+  color: var(--ink-faint);
+  font-size: 0.75rem;
+  margin: 0;
+  text-align: end;
+}
+
+@media (max-width: 1100px) {
+  .analysis-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 620px) {
+  .analysis-metric-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .category-ranking-visual {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding-inline-start: 0;
+  }
+
+  .category-ranking-visual .sparkline {
+    display: none;
+  }
+
+  /* The name and its figure belong on one line; the bar reads as a rule beneath them, not as
+     a divider that pushes the amount onto a line of its own. */
+  .payee-list li,
+  .account-activity-list li {
+    gap: 0.4rem 0.9rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .payee-list li > div:first-child,
+  .account-activity-list li > div:first-child {
+    grid-area: 1 / 1;
+  }
+
+  .payee-list li > .money-amount,
+  .account-activity-list .account-activity-figures {
+    grid-area: 1 / 2;
+    justify-self: end;
+  }
+
+  .payee-list .meter-bar,
+  .account-activity-list .meter-bar {
+    grid-area: 2 / 1 / 2 / -1;
+  }
+
+  /* A pill only reads as a pill on one line. Once the options wrap, a panel radius is right. */
+  .segmented-control {
+    border-radius: var(--radius-md);
+  }
 }

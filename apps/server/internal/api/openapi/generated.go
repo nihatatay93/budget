@@ -20,28 +20,109 @@ import (
 
 // Defines values for AccountType.
 const (
-	Bank       AccountType = "bank"
-	Cash       AccountType = "cash"
-	CreditCard AccountType = "credit_card"
-	Investment AccountType = "investment"
-	Other      AccountType = "other"
-	Savings    AccountType = "savings"
+	AccountTypeBank       AccountType = "bank"
+	AccountTypeCash       AccountType = "cash"
+	AccountTypeCreditCard AccountType = "credit_card"
+	AccountTypeInvestment AccountType = "investment"
+	AccountTypeOther      AccountType = "other"
+	AccountTypeSavings    AccountType = "savings"
 )
 
 // Valid indicates whether the value is a known member of the AccountType enum.
 func (e AccountType) Valid() bool {
 	switch e {
-	case Bank:
+	case AccountTypeBank:
 		return true
-	case Cash:
+	case AccountTypeCash:
 		return true
-	case CreditCard:
+	case AccountTypeCreditCard:
 		return true
-	case Investment:
+	case AccountTypeInvestment:
 		return true
-	case Other:
+	case AccountTypeOther:
 		return true
-	case Savings:
+	case AccountTypeSavings:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AnalysisGranularity.
+const (
+	Day   AnalysisGranularity = "day"
+	Month AnalysisGranularity = "month"
+	Week  AnalysisGranularity = "week"
+)
+
+// Valid indicates whether the value is a known member of the AnalysisGranularity enum.
+func (e AnalysisGranularity) Valid() bool {
+	switch e {
+	case Day:
+		return true
+	case Month:
+		return true
+	case Week:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CategoryColorKey.
+const (
+	Amber  CategoryColorKey = "amber"
+	Blue   CategoryColorKey = "blue"
+	Cyan   CategoryColorKey = "cyan"
+	Green  CategoryColorKey = "green"
+	Mint   CategoryColorKey = "mint"
+	Orange CategoryColorKey = "orange"
+	Pink   CategoryColorKey = "pink"
+	Purple CategoryColorKey = "purple"
+	Red    CategoryColorKey = "red"
+	Slate  CategoryColorKey = "slate"
+)
+
+// Valid indicates whether the value is a known member of the CategoryColorKey enum.
+func (e CategoryColorKey) Valid() bool {
+	switch e {
+	case Amber:
+		return true
+	case Blue:
+		return true
+	case Cyan:
+		return true
+	case Green:
+		return true
+	case Mint:
+		return true
+	case Orange:
+		return true
+	case Pink:
+		return true
+	case Purple:
+		return true
+	case Red:
+		return true
+	case Slate:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CategoryIconType.
+const (
+	Emoji  CategoryIconType = "emoji"
+	System CategoryIconType = "system"
+)
+
+// Valid indicates whether the value is a known member of the CategoryIconType enum.
+func (e CategoryIconType) Valid() bool {
+	switch e {
+	case Emoji:
+		return true
+	case System:
 		return true
 	default:
 		return false
@@ -81,6 +162,102 @@ func (e Currency) Valid() bool {
 	case TRY:
 		return true
 	case USD:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PredefinedCategoryKey.
+const (
+	PredefinedCategoryKeyDining             PredefinedCategoryKey = "dining"
+	PredefinedCategoryKeyEducation          PredefinedCategoryKey = "education"
+	PredefinedCategoryKeyEntertainment      PredefinedCategoryKey = "entertainment"
+	PredefinedCategoryKeyFreelance          PredefinedCategoryKey = "freelance"
+	PredefinedCategoryKeyGiftIncome         PredefinedCategoryKey = "gift_income"
+	PredefinedCategoryKeyGifts              PredefinedCategoryKey = "gifts"
+	PredefinedCategoryKeyGroceries          PredefinedCategoryKey = "groceries"
+	PredefinedCategoryKeyGroupEntertainment PredefinedCategoryKey = "group_entertainment"
+	PredefinedCategoryKeyGroupFood          PredefinedCategoryKey = "group_food"
+	PredefinedCategoryKeyGroupHome          PredefinedCategoryKey = "group_home"
+	PredefinedCategoryKeyGroupIncome        PredefinedCategoryKey = "group_income"
+	PredefinedCategoryKeyGroupLifestyle     PredefinedCategoryKey = "group_lifestyle"
+	PredefinedCategoryKeyGroupMisc          PredefinedCategoryKey = "group_misc"
+	PredefinedCategoryKeyGroupTransport     PredefinedCategoryKey = "group_transport"
+	PredefinedCategoryKeyHealth             PredefinedCategoryKey = "health"
+	PredefinedCategoryKeyHousing            PredefinedCategoryKey = "housing"
+	PredefinedCategoryKeyInvestment         PredefinedCategoryKey = "investment"
+	PredefinedCategoryKeyOther              PredefinedCategoryKey = "other"
+	PredefinedCategoryKeyOtherIncome        PredefinedCategoryKey = "other_income"
+	PredefinedCategoryKeyPersonalCare       PredefinedCategoryKey = "personal_care"
+	PredefinedCategoryKeyRefund             PredefinedCategoryKey = "refund"
+	PredefinedCategoryKeyRentalIncome       PredefinedCategoryKey = "rental_income"
+	PredefinedCategoryKeySalary             PredefinedCategoryKey = "salary"
+	PredefinedCategoryKeyShopping           PredefinedCategoryKey = "shopping"
+	PredefinedCategoryKeySubscriptions      PredefinedCategoryKey = "subscriptions"
+	PredefinedCategoryKeyTransportation     PredefinedCategoryKey = "transportation"
+	PredefinedCategoryKeyTravel             PredefinedCategoryKey = "travel"
+	PredefinedCategoryKeyUtilities          PredefinedCategoryKey = "utilities"
+)
+
+// Valid indicates whether the value is a known member of the PredefinedCategoryKey enum.
+func (e PredefinedCategoryKey) Valid() bool {
+	switch e {
+	case PredefinedCategoryKeyDining:
+		return true
+	case PredefinedCategoryKeyEducation:
+		return true
+	case PredefinedCategoryKeyEntertainment:
+		return true
+	case PredefinedCategoryKeyFreelance:
+		return true
+	case PredefinedCategoryKeyGiftIncome:
+		return true
+	case PredefinedCategoryKeyGifts:
+		return true
+	case PredefinedCategoryKeyGroceries:
+		return true
+	case PredefinedCategoryKeyGroupEntertainment:
+		return true
+	case PredefinedCategoryKeyGroupFood:
+		return true
+	case PredefinedCategoryKeyGroupHome:
+		return true
+	case PredefinedCategoryKeyGroupIncome:
+		return true
+	case PredefinedCategoryKeyGroupLifestyle:
+		return true
+	case PredefinedCategoryKeyGroupMisc:
+		return true
+	case PredefinedCategoryKeyGroupTransport:
+		return true
+	case PredefinedCategoryKeyHealth:
+		return true
+	case PredefinedCategoryKeyHousing:
+		return true
+	case PredefinedCategoryKeyInvestment:
+		return true
+	case PredefinedCategoryKeyOther:
+		return true
+	case PredefinedCategoryKeyOtherIncome:
+		return true
+	case PredefinedCategoryKeyPersonalCare:
+		return true
+	case PredefinedCategoryKeyRefund:
+		return true
+	case PredefinedCategoryKeyRentalIncome:
+		return true
+	case PredefinedCategoryKeySalary:
+		return true
+	case PredefinedCategoryKeyShopping:
+		return true
+	case PredefinedCategoryKeySubscriptions:
+		return true
+	case PredefinedCategoryKeyTransportation:
+		return true
+	case PredefinedCategoryKeyTravel:
+		return true
+	case PredefinedCategoryKeyUtilities:
 		return true
 	default:
 		return false
@@ -277,6 +454,9 @@ type AccountWriteRequest struct {
 	Type            AccountType `json:"type"`
 }
 
+// AnalysisGranularity defines model for AnalysisGranularity.
+type AnalysisGranularity string
+
 // AuthResponse defines model for AuthResponse.
 type AuthResponse struct {
 	// BearerToken Present only when the requested transport is bearer.
@@ -287,15 +467,28 @@ type AuthResponse struct {
 
 // Category defines model for Category.
 type Category struct {
-	ArchivedAt  *time.Time          `json:"archived_at,omitempty"`
-	Icon        *string             `json:"icon,omitempty"`
-	Id          openapi_types.UUID  `json:"id"`
-	Kind        CategoryKind        `json:"kind"`
-	Name        string              `json:"name"`
-	ParentId    *openapi_types.UUID `json:"parent_id,omitempty"`
-	SystemKey   *SystemCategoryKey  `json:"system_key,omitempty"`
-	WorkspaceId openapi_types.UUID  `json:"workspace_id"`
+	ArchivedAt *time.Time       `json:"archived_at,omitempty"`
+	ColorKey   CategoryColorKey `json:"color_key"`
+
+	// Icon Legacy compatibility icon value. Use icon_type and icon_value instead.
+	// Deprecated: this property has been marked as deprecated upstream, but no `x-deprecated-reason` was set
+	Icon          *string                `json:"icon,omitempty"`
+	IconType      CategoryIconType       `json:"icon_type"`
+	IconValue     string                 `json:"icon_value"`
+	Id            openapi_types.UUID     `json:"id"`
+	Kind          CategoryKind           `json:"kind"`
+	Name          string                 `json:"name"`
+	ParentId      *openapi_types.UUID    `json:"parent_id,omitempty"`
+	PredefinedKey *PredefinedCategoryKey `json:"predefined_key,omitempty"`
+	SystemKey     *SystemCategoryKey     `json:"system_key,omitempty"`
+	WorkspaceId   openapi_types.UUID     `json:"workspace_id"`
 }
+
+// CategoryColorKey defines model for CategoryColorKey.
+type CategoryColorKey string
+
+// CategoryIconType defines model for CategoryIconType.
+type CategoryIconType string
 
 // CategoryKind defines model for CategoryKind.
 type CategoryKind string
@@ -307,10 +500,16 @@ type CategoryListResponse struct {
 
 // CategoryWriteRequest defines model for CategoryWriteRequest.
 type CategoryWriteRequest struct {
-	Icon     *string             `json:"icon,omitempty"`
-	Kind     CategoryKind        `json:"kind"`
-	Name     string              `json:"name"`
-	ParentId *openapi_types.UUID `json:"parent_id,omitempty"`
+	ColorKey *CategoryColorKey `json:"color_key,omitempty"`
+
+	// Icon Legacy icon input. New clients must provide icon_type, icon_value, and color_key.
+	// Deprecated: this property has been marked as deprecated upstream, but no `x-deprecated-reason` was set
+	Icon      *string             `json:"icon,omitempty"`
+	IconType  *CategoryIconType   `json:"icon_type,omitempty"`
+	IconValue *string             `json:"icon_value,omitempty"`
+	Kind      CategoryKind        `json:"kind"`
+	Name      string              `json:"name"`
+	ParentId  *openapi_types.UUID `json:"parent_id,omitempty"`
 }
 
 // CreateWorkspaceInvitationRequest defines model for CreateWorkspaceInvitationRequest.
@@ -377,15 +576,20 @@ type FinancialProjectionAccount struct {
 
 // FinancialProjectionCategory defines model for FinancialProjectionCategory.
 type FinancialProjectionCategory struct {
-	ArchivedAt        *time.Time          `json:"archived_at,omitempty"`
-	DirectBaseMinor   ProjectionAmounts   `json:"direct_base_minor"`
-	Icon              *string             `json:"icon,omitempty"`
-	Id                openapi_types.UUID  `json:"id"`
-	Kind              CategoryKind        `json:"kind"`
-	Name              string              `json:"name"`
-	ParentId          *openapi_types.UUID `json:"parent_id,omitempty"`
-	RolledUpBaseMinor ProjectionAmounts   `json:"rolled_up_base_minor"`
-	SystemKey         *SystemCategoryKey  `json:"system_key,omitempty"`
+	ArchivedAt      *time.Time        `json:"archived_at,omitempty"`
+	ColorKey        CategoryColorKey  `json:"color_key"`
+	DirectBaseMinor ProjectionAmounts `json:"direct_base_minor"`
+	// Deprecated: this property has been marked as deprecated upstream, but no `x-deprecated-reason` was set
+	Icon              *string                `json:"icon,omitempty"`
+	IconType          CategoryIconType       `json:"icon_type"`
+	IconValue         string                 `json:"icon_value"`
+	Id                openapi_types.UUID     `json:"id"`
+	Kind              CategoryKind           `json:"kind"`
+	Name              string                 `json:"name"`
+	ParentId          *openapi_types.UUID    `json:"parent_id,omitempty"`
+	PredefinedKey     *PredefinedCategoryKey `json:"predefined_key,omitempty"`
+	RolledUpBaseMinor ProjectionAmounts      `json:"rolled_up_base_minor"`
+	SystemKey         *SystemCategoryKey     `json:"system_key,omitempty"`
 }
 
 // FinancialProjectionPeriod defines model for FinancialProjectionPeriod.
@@ -435,13 +639,18 @@ type MonthlyBudget struct {
 
 // MonthlyBudgetItem defines model for MonthlyBudgetItem.
 type MonthlyBudgetItem struct {
-	CategoryArchivedAt *time.Time         `json:"category_archived_at,omitempty"`
-	CategoryIcon       *string            `json:"category_icon,omitempty"`
-	CategoryId         openapi_types.UUID `json:"category_id"`
-	CategoryName       string             `json:"category_name"`
-	Id                 openapi_types.UUID `json:"id"`
-	PlannedBaseMinor   int64              `json:"planned_base_minor"`
-	RemainingBaseMinor int64              `json:"remaining_base_minor"`
+	CategoryArchivedAt *time.Time       `json:"category_archived_at,omitempty"`
+	CategoryColorKey   CategoryColorKey `json:"category_color_key"`
+	// Deprecated: this property has been marked as deprecated upstream, but no `x-deprecated-reason` was set
+	CategoryIcon          *string                `json:"category_icon,omitempty"`
+	CategoryIconType      CategoryIconType       `json:"category_icon_type"`
+	CategoryIconValue     string                 `json:"category_icon_value"`
+	CategoryId            openapi_types.UUID     `json:"category_id"`
+	CategoryName          string                 `json:"category_name"`
+	CategoryPredefinedKey *PredefinedCategoryKey `json:"category_predefined_key,omitempty"`
+	Id                    openapi_types.UUID     `json:"id"`
+	PlannedBaseMinor      int64                  `json:"planned_base_minor"`
+	RemainingBaseMinor    int64                  `json:"remaining_base_minor"`
 
 	// UsedBaseMinor Posted expense usage; refunds reduce this signed reporting value.
 	UsedBaseMinor int64 `json:"used_base_minor"`
@@ -459,6 +668,9 @@ type MonthlyBudgetWriteRequest struct {
 	Items []MonthlyBudgetItemWrite `json:"items"`
 	Name  string                   `json:"name"`
 }
+
+// PredefinedCategoryKey Stable identifier for a built-in category, which clients resolve to a localized name. A group_* key names a section: an ordinary category whose members carry it as their parent, so budgets and reports roll up through it like any other parent.
+type PredefinedCategoryKey string
 
 // ProjectionAmounts defines model for ProjectionAmounts.
 type ProjectionAmounts struct {
@@ -490,6 +702,157 @@ type SessionResponse struct {
 // SessionTransport defines model for SessionTransport.
 type SessionTransport string
 
+// SpendingAnalysis defines model for SpendingAnalysis.
+type SpendingAnalysis struct {
+	Accounts   []SpendingAnalysisAccount  `json:"accounts"`
+	Categories []SpendingAnalysisCategory `json:"categories"`
+
+	// CategorySeries Sparse per-category bucket activity; buckets without activity are omitted.
+	CategorySeries []SpendingAnalysisCategoryPoint `json:"category_series"`
+
+	// Days Days with posted activity; days without activity are omitted.
+	Days []SpendingAnalysisDay `json:"days"`
+
+	// Payees Highest-spending payees in the window.
+	Payees []SpendingAnalysisPayee `json:"payees"`
+	Period SpendingAnalysisPeriod  `json:"period"`
+
+	// Series Contiguous time buckets covering the whole window, including empty ones.
+	Series   []SpendingAnalysisBucket  `json:"series"`
+	Totals   SpendingAnalysisTotals    `json:"totals"`
+	Weekdays []SpendingAnalysisWeekday `json:"weekdays"`
+}
+
+// SpendingAnalysisAccount defines model for SpendingAnalysisAccount.
+type SpendingAnalysisAccount struct {
+	ArchivedAt *time.Time `json:"archived_at,omitempty"`
+
+	// Currency Supported currency codes. All members use two minor-unit decimal places. See docs/decisions/0005-supported-currencies-and-display-conversion.md.
+	Currency        Currency           `json:"currency"`
+	Id              openapi_types.UUID `json:"id"`
+	InflowBaseMinor int64              `json:"inflow_base_minor"`
+	Name            string             `json:"name"`
+
+	// OutflowBaseMinor Positive total that left the account, excluding transfers.
+	OutflowBaseMinor int64       `json:"outflow_base_minor"`
+	TransactionCount int64       `json:"transaction_count"`
+	Type             AccountType `json:"type"`
+}
+
+// SpendingAnalysisBucket defines model for SpendingAnalysisBucket.
+type SpendingAnalysisBucket struct {
+	EndDate           openapi_types.Date `json:"end_date"`
+	IncomeBaseMinor   int64              `json:"income_base_minor"`
+	NetBaseMinor      int64              `json:"net_base_minor"`
+	SpendingBaseMinor int64              `json:"spending_base_minor"`
+	StartDate         openapi_types.Date `json:"start_date"`
+	TransactionCount  int64              `json:"transaction_count"`
+}
+
+// SpendingAnalysisCategory defines model for SpendingAnalysisCategory.
+type SpendingAnalysisCategory struct {
+	ArchivedAt                  *time.Time          `json:"archived_at,omitempty"`
+	ColorKey                    CategoryColorKey    `json:"color_key"`
+	ComparisonDirectBaseMinor   int64               `json:"comparison_direct_base_minor"`
+	ComparisonRolledUpBaseMinor int64               `json:"comparison_rolled_up_base_minor"`
+	DirectBaseMinor             int64               `json:"direct_base_minor"`
+	FirstDate                   *openapi_types.Date `json:"first_date,omitempty"`
+	IconType                    CategoryIconType    `json:"icon_type"`
+	IconValue                   string              `json:"icon_value"`
+	Id                          openapi_types.UUID  `json:"id"`
+	Kind                        CategoryKind        `json:"kind"`
+
+	// LargestBaseMinor Largest single allocation in the window, in reporting orientation.
+	LargestBaseMinor         int64                  `json:"largest_base_minor"`
+	LastDate                 *openapi_types.Date    `json:"last_date,omitempty"`
+	Name                     string                 `json:"name"`
+	ParentId                 *openapi_types.UUID    `json:"parent_id,omitempty"`
+	PredefinedKey            *PredefinedCategoryKey `json:"predefined_key,omitempty"`
+	RolledUpBaseMinor        int64                  `json:"rolled_up_base_minor"`
+	RolledUpTransactionCount int64                  `json:"rolled_up_transaction_count"`
+	SystemKey                *SystemCategoryKey     `json:"system_key,omitempty"`
+	TransactionCount         int64                  `json:"transaction_count"`
+}
+
+// SpendingAnalysisCategoryPoint defines model for SpendingAnalysisCategoryPoint.
+type SpendingAnalysisCategoryPoint struct {
+	// BaseMinor Direct category activity in reporting orientation.
+	BaseMinor  int64              `json:"base_minor"`
+	CategoryId openapi_types.UUID `json:"category_id"`
+
+	// StartDate Bucket anchor, aligned with the series granularity.
+	StartDate openapi_types.Date `json:"start_date"`
+}
+
+// SpendingAnalysisDay defines model for SpendingAnalysisDay.
+type SpendingAnalysisDay struct {
+	Date              openapi_types.Date `json:"date"`
+	IncomeBaseMinor   int64              `json:"income_base_minor"`
+	SpendingBaseMinor int64              `json:"spending_base_minor"`
+	TransactionCount  int64              `json:"transaction_count"`
+}
+
+// SpendingAnalysisPayee defines model for SpendingAnalysisPayee.
+type SpendingAnalysisPayee struct {
+	FirstDate         openapi_types.Date `json:"first_date"`
+	IncomeBaseMinor   int64              `json:"income_base_minor"`
+	LastDate          openapi_types.Date `json:"last_date"`
+	Payee             string             `json:"payee"`
+	SpendingBaseMinor int64              `json:"spending_base_minor"`
+	TransactionCount  int64              `json:"transaction_count"`
+}
+
+// SpendingAnalysisPeriod defines model for SpendingAnalysisPeriod.
+type SpendingAnalysisPeriod struct {
+	// BaseCurrency Supported currency codes. All members use two minor-unit decimal places. See docs/decisions/0005-supported-currencies-and-display-conversion.md.
+	BaseCurrency Currency `json:"base_currency"`
+
+	// ComparisonFromDate Start of the equal-length window immediately preceding from_date.
+	ComparisonFromDate openapi_types.Date `json:"comparison_from_date"`
+
+	// ComparisonToDate End of the comparison window; always the day before from_date.
+	ComparisonToDate openapi_types.Date  `json:"comparison_to_date"`
+	FromDate         openapi_types.Date  `json:"from_date"`
+	Granularity      AnalysisGranularity `json:"granularity"`
+	Timezone         string              `json:"timezone"`
+	ToDate           openapi_types.Date  `json:"to_date"`
+}
+
+// SpendingAnalysisTotals defines model for SpendingAnalysisTotals.
+type SpendingAnalysisTotals struct {
+	ComparisonIncomeBaseMinor   int64 `json:"comparison_income_base_minor"`
+	ComparisonNetBaseMinor      int64 `json:"comparison_net_base_minor"`
+	ComparisonSpendingBaseMinor int64 `json:"comparison_spending_base_minor"`
+
+	// DayCount Inclusive length of the window in calendar days.
+	DayCount        int64 `json:"day_count"`
+	IncomeBaseMinor int64 `json:"income_base_minor"`
+
+	// LargestSpendingBaseMinor Largest single posted transaction net expense in the window.
+	LargestSpendingBaseMinor int64 `json:"largest_spending_base_minor"`
+
+	// NetBaseMinor Income minus spending.
+	NetBaseMinor int64 `json:"net_base_minor"`
+
+	// SpendingBaseMinor Positive when money left the workspace, matching reporting orientation.
+	SpendingBaseMinor int64 `json:"spending_base_minor"`
+
+	// SpendingDayCount Calendar days in the window that carried posted spending.
+	SpendingDayCount         int64 `json:"spending_day_count"`
+	SpendingTransactionCount int64 `json:"spending_transaction_count"`
+	TransactionCount         int64 `json:"transaction_count"`
+}
+
+// SpendingAnalysisWeekday defines model for SpendingAnalysisWeekday.
+type SpendingAnalysisWeekday struct {
+	IncomeBaseMinor   int64 `json:"income_base_minor"`
+	SpendingBaseMinor int64 `json:"spending_base_minor"`
+	TransactionCount  int64 `json:"transaction_count"`
+
+	// Weekday ISO weekday, where 1 is Monday and 7 is Sunday.
+	Weekday int `json:"weekday"`
+}
+
 // SystemCategoryKey defines model for SystemCategoryKey.
 type SystemCategoryKey string
 
@@ -520,7 +883,8 @@ type TransactionAllocation struct {
 
 // TransactionAllocationWrite defines model for TransactionAllocationWrite.
 type TransactionAllocationWrite struct {
-	AmountBaseMinor int64              `json:"amount_base_minor"`
+	// AmountBaseMinor Signed amount in workspace base currency. It may be omitted only when the request carries exactly one allocation, in which case it takes the transaction's total entry base amount, which for a foreign-currency account is the value booked at the transaction date's rate. A split must state every allocation amount, because the division between categories is the client's decision and cannot be derived.
+	AmountBaseMinor *int64             `json:"amount_base_minor,omitempty"`
 	CategoryId      openapi_types.UUID `json:"category_id"`
 }
 
@@ -635,6 +999,12 @@ type WorkspaceSummary struct {
 
 // AccountID defines model for AccountID.
 type AccountID = openapi_types.UUID
+
+// AnalysisFromDate defines model for AnalysisFromDate.
+type AnalysisFromDate = openapi_types.Date
+
+// AnalysisToDate defines model for AnalysisToDate.
+type AnalysisToDate = openapi_types.Date
 
 // BudgetMonthPath defines model for BudgetMonthPath.
 type BudgetMonthPath = string
@@ -877,6 +1247,21 @@ type UpdateWorkspaceMemberRoleParams struct {
 	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
 }
 
+// GetSpendingAnalysisParams defines parameters for GetSpendingAnalysis.
+type GetSpendingAnalysisParams struct {
+	// FromDate Inclusive analysis-window start. Must be supplied with to_date. The window may span at most ten years, because the series carries one bucket per calendar step and so costs what the window spans rather than what happened inside it.
+	FromDate *AnalysisFromDate `form:"from_date,omitempty" json:"from_date,omitempty"`
+
+	// ToDate Inclusive analysis-window end. Must be supplied with from_date.
+	ToDate *AnalysisToDate `form:"to_date,omitempty" json:"to_date,omitempty"`
+
+	// Granularity Time-bucket width for the analysis series. Omitted means the server chooses a width that suits the window length, which is always a width it will accept. A width fine enough to produce more than 750 buckets over the requested window is refused, so a decade cannot be requested one day at a time.
+	Granularity *AnalysisGranularity `form:"granularity,omitempty" json:"granularity,omitempty"`
+
+	// XRequestID Optional caller-provided correlation identifier.
+	XRequestID *RequestID `json:"X-Request-ID,omitempty"`
+}
+
 // ListTransactionsParams defines parameters for ListTransactions.
 type ListTransactionsParams struct {
 	FromDate *TransactionFromDate `form:"from_date,omitempty" json:"from_date,omitempty"`
@@ -1003,7 +1388,7 @@ type ServerInterface interface {
 	// GetCategory Get a category in a workspace
 	// (GET /v1/workspaces/{workspaceId}/categories/{categoryId})
 	GetCategory(w http.ResponseWriter, r *http.Request, workspaceId WorkspaceID, categoryId CategoryID, params GetCategoryParams)
-	// UpdateCategory Replace editable category fields
+	// UpdateCategory Replace editable category fields; built-in categories retain their localized identity and update appearance only
 	// (PUT /v1/workspaces/{workspaceId}/categories/{categoryId})
 	UpdateCategory(w http.ResponseWriter, r *http.Request, workspaceId WorkspaceID, categoryId CategoryID, params UpdateCategoryParams)
 	// ListExchangeRates List display conversion rates from the workspace base currency
@@ -1030,6 +1415,9 @@ type ServerInterface interface {
 	// UpdateWorkspaceMemberRole Change an active workspace member's role
 	// (PATCH /v1/workspaces/{workspaceId}/members/{userId})
 	UpdateWorkspaceMemberRole(w http.ResponseWriter, r *http.Request, workspaceId WorkspaceID, userId MemberUserID, params UpdateWorkspaceMemberRoleParams)
+	// GetSpendingAnalysis Analyze spending and income over time
+	// (GET /v1/workspaces/{workspaceId}/spending-analysis)
+	GetSpendingAnalysis(w http.ResponseWriter, r *http.Request, workspaceId WorkspaceID, params GetSpendingAnalysisParams)
 	// ListTransactions List recent transaction aggregates in a workspace
 	// (GET /v1/workspaces/{workspaceId}/transactions)
 	ListTransactions(w http.ResponseWriter, r *http.Request, workspaceId WorkspaceID, params ListTransactionsParams)
@@ -2498,6 +2886,95 @@ func (siw *ServerInterfaceWrapper) UpdateWorkspaceMemberRole(w http.ResponseWrit
 	handler.ServeHTTP(w, r)
 }
 
+// GetSpendingAnalysis operation middleware
+func (siw *ServerInterfaceWrapper) GetSpendingAnalysis(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "workspaceId" -------------
+	var workspaceId WorkspaceID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workspaceId", r.PathValue("workspaceId"), &workspaceId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workspaceId", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetSpendingAnalysisParams
+
+	// ------------- Optional query parameter "from_date" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "from_date", r.URL.Query(), &params.FromDate, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "from_date"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from_date", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "to_date" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "to_date", r.URL.Query(), &params.ToDate, runtime.BindQueryParameterOptions{Type: "string", Format: "date"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "to_date"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to_date", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "granularity" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "granularity", r.URL.Query(), &params.Granularity, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "granularity"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "granularity", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "X-Request-ID" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("X-Request-ID")]; found {
+		var XRequestID RequestID
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "X-Request-ID", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "X-Request-ID", valueList[0], &XRequestID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "X-Request-ID", Err: err})
+			return
+		}
+
+		params.XRequestID = &XRequestID
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSpendingAnalysis(w, r, workspaceId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListTransactions operation middleware
 func (siw *ServerInterfaceWrapper) ListTransactions(w http.ResponseWriter, r *http.Request) {
 
@@ -2958,6 +3435,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/workspaces/{workspaceId}/transactions/{transactionId}", wrapper.GetTransaction)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/workspaces/{workspaceId}/transactions/{transactionId}", wrapper.UpdateTransaction)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/workspaces/{workspaceId}/financial-projection", wrapper.GetFinancialProjection)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/workspaces/{workspaceId}/spending-analysis", wrapper.GetSpendingAnalysis)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/workspaces/{workspaceId}/budgets", wrapper.GetMonthlyBudget)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/v1/workspaces/{workspaceId}/budgets/{month}", wrapper.ReplaceMonthlyBudget)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/v1/workspaces/{workspaceId}/exchange-rates", wrapper.ListExchangeRates)
@@ -5873,6 +6351,109 @@ func (response UpdateWorkspaceMemberRole500JSONResponse) VisitUpdateWorkspaceMem
 	return err
 }
 
+type GetSpendingAnalysisRequestObject struct {
+	WorkspaceId WorkspaceID `json:"workspaceId"`
+	Params      GetSpendingAnalysisParams
+}
+
+type GetSpendingAnalysisResponseObject interface {
+	VisitGetSpendingAnalysisResponse(w http.ResponseWriter) error
+}
+
+type GetSpendingAnalysis200ResponseHeaders struct {
+	XRequestID *string
+}
+
+type GetSpendingAnalysis200JSONResponse struct {
+	Body    SpendingAnalysis
+	Headers GetSpendingAnalysis200ResponseHeaders
+}
+
+func (response GetSpendingAnalysis200JSONResponse) VisitGetSpendingAnalysisResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.XRequestID != nil {
+		w.Header().Set("X-Request-ID", fmt.Sprint(*response.Headers.XRequestID))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSpendingAnalysis400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response GetSpendingAnalysis400JSONResponse) VisitGetSpendingAnalysisResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.XRequestID != nil {
+		w.Header().Set("X-Request-ID", fmt.Sprint(*response.Headers.XRequestID))
+	}
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSpendingAnalysis401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response GetSpendingAnalysis401JSONResponse) VisitGetSpendingAnalysisResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.XRequestID != nil {
+		w.Header().Set("X-Request-ID", fmt.Sprint(*response.Headers.XRequestID))
+	}
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSpendingAnalysis403JSONResponse struct{ ForbiddenJSONResponse }
+
+func (response GetSpendingAnalysis403JSONResponse) VisitGetSpendingAnalysisResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.XRequestID != nil {
+		w.Header().Set("X-Request-ID", fmt.Sprint(*response.Headers.XRequestID))
+	}
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSpendingAnalysis500JSONResponse struct {
+	InternalServerErrorJSONResponse
+}
+
+func (response GetSpendingAnalysis500JSONResponse) VisitGetSpendingAnalysisResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.XRequestID != nil {
+		w.Header().Set("X-Request-ID", fmt.Sprint(*response.Headers.XRequestID))
+	}
+	w.WriteHeader(500)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListTransactionsRequestObject struct {
 	WorkspaceId WorkspaceID `json:"workspaceId"`
 	Params      ListTransactionsParams
@@ -6526,7 +7107,7 @@ type StrictServerInterface interface {
 	// GetCategory Get a category in a workspace
 	// (GET /v1/workspaces/{workspaceId}/categories/{categoryId})
 	GetCategory(ctx context.Context, request GetCategoryRequestObject) (GetCategoryResponseObject, error)
-	// UpdateCategory Replace editable category fields
+	// UpdateCategory Replace editable category fields; built-in categories retain their localized identity and update appearance only
 	// (PUT /v1/workspaces/{workspaceId}/categories/{categoryId})
 	UpdateCategory(ctx context.Context, request UpdateCategoryRequestObject) (UpdateCategoryResponseObject, error)
 	// ListExchangeRates List display conversion rates from the workspace base currency
@@ -6553,6 +7134,9 @@ type StrictServerInterface interface {
 	// UpdateWorkspaceMemberRole Change an active workspace member's role
 	// (PATCH /v1/workspaces/{workspaceId}/members/{userId})
 	UpdateWorkspaceMemberRole(ctx context.Context, request UpdateWorkspaceMemberRoleRequestObject) (UpdateWorkspaceMemberRoleResponseObject, error)
+	// GetSpendingAnalysis Analyze spending and income over time
+	// (GET /v1/workspaces/{workspaceId}/spending-analysis)
+	GetSpendingAnalysis(ctx context.Context, request GetSpendingAnalysisRequestObject) (GetSpendingAnalysisResponseObject, error)
 	// ListTransactions List recent transaction aggregates in a workspace
 	// (GET /v1/workspaces/{workspaceId}/transactions)
 	ListTransactions(ctx context.Context, request ListTransactionsRequestObject) (ListTransactionsResponseObject, error)
@@ -7404,6 +7988,33 @@ func (sh *strictHandler) UpdateWorkspaceMemberRole(w http.ResponseWriter, r *htt
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateWorkspaceMemberRoleResponseObject); ok {
 		if err := validResponse.VisitUpdateWorkspaceMemberRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetSpendingAnalysis operation middleware
+func (sh *strictHandler) GetSpendingAnalysis(w http.ResponseWriter, r *http.Request, workspaceId WorkspaceID, params GetSpendingAnalysisParams) {
+	var request GetSpendingAnalysisRequestObject
+
+	request.WorkspaceId = workspaceId
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetSpendingAnalysis(ctx, request.(GetSpendingAnalysisRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetSpendingAnalysis")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetSpendingAnalysisResponseObject); ok {
+		if err := validResponse.VisitGetSpendingAnalysisResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

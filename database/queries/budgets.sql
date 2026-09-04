@@ -81,7 +81,11 @@ SELECT
     budget_items.id,
     budget_items.category_id,
     categories.name AS category_name,
+    categories.predefined_key AS category_predefined_key,
     categories.icon AS category_icon,
+    categories.icon_type AS category_icon_type,
+    categories.icon_value AS category_icon_value,
+    categories.color_key AS category_color_key,
     categories.archived_at AS category_archived_at,
     budget_items.amount_base_minor AS planned_base_minor,
     item_usage.signed_allocation_base_minor

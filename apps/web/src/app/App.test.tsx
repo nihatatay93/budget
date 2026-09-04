@@ -113,7 +113,9 @@ test("deep-links into a workspace destination and navigates without losing its w
 
   fireEvent.click(within(management).getByRole("link", { name: "Categories" }));
   expect(await screen.findByRole("heading", { name: "Categories", level: 1 })).toBeInTheDocument();
-  expect(await screen.findByText("Uncategorized Expense")).toBeInTheDocument();
+  // The category names its own section and its own tile; picking the tile reveals its row.
+  expect(await screen.findByRole("heading", { name: "Uncategorized Expense" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Uncategorized Expense" }));
   expect(screen.getByText("Protected")).toBeInTheDocument();
 });
 

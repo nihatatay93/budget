@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/nihatatay93/budget/internal/account"
+	"github.com/nihatatay93/budget/internal/analysis"
 	"github.com/nihatatay93/budget/internal/budget"
 	"github.com/nihatatay93/budget/internal/category"
 	"github.com/nihatatay93/budget/internal/exchange"
@@ -43,6 +44,10 @@ type transactionService interface {
 
 type reportingService interface {
 	Project(context.Context, string, string, reporting.Query) (reporting.Projection, error)
+}
+
+type analysisService interface {
+	Analyze(context.Context, string, string, analysis.Query) (analysis.Analysis, error)
 }
 
 type budgetService interface {

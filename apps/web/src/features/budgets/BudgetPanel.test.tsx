@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Category, MonthlyBudget } from "../../api/client";
 import { expectNoAccessibilityViolations } from "../../test/accessibility";
@@ -45,8 +45,14 @@ const monthlyBudget: MonthlyBudget = {
   updated_at: "2026-08-18T08:00:00Z",
 };
 
+beforeEach(() => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  vi.setSystemTime(new Date("2026-08-18T09:00:00Z"));
+});
+
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 
@@ -63,7 +69,7 @@ describe("BudgetPanel", () => {
 
     expect(await screen.findByText("August plan", { selector: ".budget-plan-title strong" }))
       .toBeInTheDocument();
-    expect(screen.getByText("Food", { selector: ".budget-usage-copy strong" })).toBeInTheDocument();
+    expect(document.querySelector(".budget-usage-copy .category-label")).toHaveTextContent("Food");
     expect(screen.getByText(/37\.00.*remaining/)).toBeInTheDocument();
     expect(screen.getByRole("progressbar", { name: "Food budget usage" })).toHaveAttribute(
       "value",

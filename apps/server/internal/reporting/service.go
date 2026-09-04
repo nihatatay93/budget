@@ -67,15 +67,19 @@ func (k CategoryKind) Valid() bool {
 }
 
 type Category struct {
-	ID         string
-	ParentID   *string
-	Name       string
-	Kind       CategoryKind
-	SystemKey  *string
-	Icon       *string
-	ArchivedAt *time.Time
-	Direct     Amounts
-	RolledUp   Amounts
+	ID            string
+	ParentID      *string
+	Name          string
+	Kind          CategoryKind
+	SystemKey     *string
+	PredefinedKey *string
+	Icon          *string
+	IconType      string
+	IconValue     string
+	ColorKey      string
+	ArchivedAt    *time.Time
+	Direct        Amounts
+	RolledUp      Amounts
 }
 
 type Projection struct {
@@ -111,7 +115,11 @@ type CategorySnapshot struct {
 	Name                     string
 	Kind                     CategoryKind
 	SystemKey                *string
+	PredefinedKey            *string
 	Icon                     *string
+	IconType                 string
+	IconValue                string
+	ColorKey                 string
 	ArchivedAt               *time.Time
 	DirectPostedSignedMinor  int64
 	DirectPendingSignedMinor int64
@@ -255,7 +263,9 @@ func buildProjection(snapshot Snapshot) (Projection, error) {
 		}
 		projection.Categories = append(projection.Categories, Category{
 			ID: value.ID, ParentID: value.ParentID, Name: value.Name, Kind: value.Kind,
-			SystemKey: value.SystemKey, Icon: value.Icon, ArchivedAt: value.ArchivedAt,
+			SystemKey: value.SystemKey, PredefinedKey: value.PredefinedKey,
+			Icon: value.Icon, IconType: value.IconType, IconValue: value.IconValue,
+			ColorKey: value.ColorKey, ArchivedAt: value.ArchivedAt,
 			Direct: direct, RolledUp: rolled,
 		})
 		target := &projection.Summary.IncomeBaseMinor

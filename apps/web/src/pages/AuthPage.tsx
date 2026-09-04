@@ -12,6 +12,7 @@ import {
 } from "../api/client";
 import { AppIcon, BrandMark } from "../components/ExperiencePrimitives";
 import { type Currency, SUPPORTED_CURRENCIES, currencyLabel } from "../lib/currency";
+import { t } from "../lib/i18n";
 
 type AuthMode = "login" | "register";
 
@@ -21,7 +22,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
-  const [workspaceName, setWorkspaceName] = useState("Personal");
+  const [workspaceName, setWorkspaceName] = useState(t("Personal"));
   const [baseCurrency, setBaseCurrency] = useState<Currency>("USD");
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
@@ -61,42 +62,41 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     <main className="app-shell auth-shell">
       <section className="brand-panel auth-brand">
         <BrandMark />
-        <p className="eyebrow">Private by design</p>
+        <p className="eyebrow">{t("Private by design")}</p>
         <h1>Budget</h1>
         <p className="auth-promise">
-          See where you stand, plan what comes next, and keep every number on infrastructure
-          you control.
+          {t("See where you stand, plan what comes next, and keep every number on infrastructure you control.")}
         </p>
-        <ul className="auth-values" aria-label="Budget principles">
+        <ul className="auth-values" aria-label={t("Budget principles")}>
           <li>
             <span className="auth-value-icon"><AppIcon name="chart" /></span>
-            <span><strong>Clear by default</strong>Balances, spending, and plans stay easy to scan.</span>
+            <span><strong>{t("Clear by default")}</strong>{t("Balances, spending, and plans stay easy to scan.")}</span>
           </li>
           <li>
             <span className="auth-value-icon"><AppIcon name="shield" /></span>
-            <span><strong>Yours by design</strong>Self-hosted data with secure web and native sessions.</span>
+            <span><strong>{t("Yours by design")}</strong>{t("Self-hosted data with secure web and native sessions.")}</span>
           </li>
           <li>
             <span className="auth-value-icon"><AppIcon name="layers" /></span>
-            <span><strong>Built on the ledger</strong>Every total traces back to real financial activity.</span>
+            <span><strong>{t("Built on the ledger")}</strong>{t("Every total traces back to real financial activity.")}</span>
           </li>
         </ul>
       </section>
       <section className="form-panel">
         <div className="form-panel-heading">
-          <p className="eyebrow">{registering ? "Create your home base" : "Welcome back"}</p>
-          <h2>{registering ? "Start a workspace" : "Sign in"}</h2>
+          <p className="eyebrow">{registering ? t("Create your home base") : t("Welcome back")}</p>
+          <h2>{registering ? t("Start a workspace") : t("Sign in")}</h2>
           <p>
             {registering
-              ? "Create the private space where your accounts, plans, and people come together."
-              : "Continue to your private financial workspace."}
+              ? t("Create the private space where your accounts, plans, and people come together.")
+              : t("Continue to your private financial workspace.")}
           </p>
         </div>
         <form onSubmit={submit}>
           {registering ? (
             <>
               <label>
-                Your name
+                {t("Your name")}
                 <input
                   autoComplete="name"
                   required
@@ -105,7 +105,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                 />
               </label>
               <label>
-                Workspace name
+                {t("Workspace name")}
                 <input
                   required
                   value={workspaceName}
@@ -113,7 +113,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                 />
               </label>
               <label>
-                Base currency
+                {t("Base currency")}
                 <select
                   aria-describedby="currency-help"
                   required
@@ -127,13 +127,13 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
                   ))}
                 </select>
                 <span id="currency-help">
-                  The reporting currency for this workspace. It cannot be changed later.
+                  {t("The reporting currency for this workspace. It cannot be changed later.")}
                 </span>
               </label>
             </>
           ) : null}
           <label>
-            Email
+            {t("Email")}
             <input
               autoComplete="email"
               required
@@ -143,7 +143,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
             />
           </label>
           <label>
-            Password
+            {t("Password")}
             <input
               autoComplete={registering ? "new-password" : "current-password"}
               minLength={registering ? 15 : undefined}
@@ -153,20 +153,20 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
             />
-            {registering ? <span>Use at least 15 characters. Spaces are welcome.</span> : null}
+            {registering ? <span>{t("Use at least 15 characters. Spaces are welcome.")}</span> : null}
           </label>
           {mutation.isError ? <p className="form-error" role="alert">{mutation.error.message}</p> : null}
           <button disabled={mutation.isPending} type="submit">
-            {mutation.isPending ? "Working…" : registering ? "Create workspace" : "Sign in"}
+            {mutation.isPending ? t("Working…") : registering ? t("Create workspace") : t("Sign in")}
           </button>
         </form>
         <p className="form-switch">
-          {registering ? "Already have an account?" : "New to Budget?"}{" "}
+          {registering ? t("Already have an account?") : t("New to Budget?")}{" "}
           <Link to={registering ? "/login" : "/register"}>
-            {registering ? "Sign in" : "Create a workspace"}
+            {registering ? t("Sign in") : t("Create a workspace")}
           </Link>
         </p>
-        <p className="auth-footnote"><AppIcon name="shield" size={16} /> Secure session · No third-party analytics</p>
+        <p className="auth-footnote"><AppIcon name="shield" size={16} /> {t("Secure session · No third-party analytics")}</p>
       </section>
     </main>
   );

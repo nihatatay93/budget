@@ -17,10 +17,12 @@ import {
   listCategories,
   listTransactions,
   monthlyBudgetQueryPrefix,
+  spendingAnalysisQueryPrefix,
   transactionsQueryKey,
   updateTransaction,
 } from "../../api/client";
 import { AppIcon } from "../../components/ExperiencePrimitives";
+import { CategoryAppearance, CategoryLabel } from "../../components/CategoryAppearance";
 import {
   EmptyState,
   InlineNotice,
@@ -32,10 +34,30 @@ import {
   ToastRegion,
 } from "../../components/Presentation";
 import { majorAmountInput, parseMajorAmount } from "../../lib/currency";
+import { categoryName, t } from "../../lib/i18n";
+import {
+  type CaptureDraft,
+  captureDraft,
+  captureRequest,
+  emptyCaptureDraft,
+  suggestedAccountId,
+} from "../../lib/transactionCapture";
+import { TransactionCaptureForm } from "./TransactionCaptureForm";
+import { frequentCategoryIds } from "../categories/CategoryTiles";
 
 type Workspace = SessionResponse["workspaces"][number];
 type EntryDraft = { key: string; accountId: string; amount: string; baseAmount: string };
 type AllocationDraft = { key: string; categoryId: string; amount: string };
+type DetailedFields = {
+  kind: TransactionWriteRequest["kind"];
+  status: TransactionWriteRequest["status"];
+  transactionDate: string;
+  payee: string;
+  description: string;
+  notes: string;
+  entries: EntryDraft[];
+  allocations: AllocationDraft[];
+};
 type KindFilter = "all" | LedgerTransaction["kind"];
 type StatusFilter = "all" | LedgerTransaction["status"];
 
@@ -68,6 +90,15 @@ function emptyAllocation(categoryId = ""): AllocationDraft {
   return { key: draftKey(), categoryId, amount: "" };
 }
 
+/** The detailed fields as one comparable value, ignoring the keys that only identify a row. */
+function detailedSignature(fields: DetailedFields) {
+  return JSON.stringify({
+    ...fields,
+    entries: fields.entries.map(({ key, ...entry }) => entry),
+    allocations: fields.allocations.map(({ key, ...allocation }) => allocation),
+  });
+}
+
 export function TransactionsPanel({ workspace, canManage }: { workspace: Workspace; canManage: boolean }) {
   const queryClient = useQueryClient();
   const transactions = useQuery({
@@ -98,14 +129,39 @@ export function TransactionsPanel({ workspace, canManage }: { workspace: Workspa
   const [entries, setEntries] = useState<EntryDraft[]>([emptyEntry()]);
   const [allocations, setAllocations] = useState<AllocationDraft[]>([]);
   const [validation, setValidation] = useState("");
+  const [editorMode, setEditorMode] = useState<"simple" | "detailed">("simple");
+  const [draft, setDraft] = useState<CaptureDraft>(() => emptyCaptureDraft(today()));
+  const [detailedOrigin, setDetailedOrigin] = useState<string>();
 
   const accountNames = useMemo(
     () => new Map((accounts.data ?? []).map((account) => [account.id, account.name])),
     [accounts.data],
   );
   const categoryNames = useMemo(
-    () => new Map((categories.data ?? []).map((category) => [category.id, category.name])),
+    () => new Map((categories.data ?? []).map((category) => [category.id, categoryName(category)])),
     [categories.data],
+  );
+  const categoryById = useMemo(
+    () => new Map((categories.data ?? []).map((category) => [category.id, category])),
+    [categories.data],
+  );
+  // The picker offers what this workspace actually uses, newest activity first.
+  const frequentCategories = useMemo(
+    () => frequentCategoryIds(
+      [...(transactions.data ?? [])]
+        .sort((left, right) => right.transaction_date.localeCompare(left.transaction_date))
+        .slice(0, 80)
+        .map((transaction) => transaction.allocations),
+    ),
+    [transactions.data],
+  );
+  const captureContext = useMemo(
+    () => ({
+      accounts: accounts.data ?? [],
+      baseCurrency: workspace.base_currency,
+      categories: categories.data ?? [],
+    }),
+    [accounts.data, categories.data, workspace.base_currency],
   );
   const filteredTransactions = useMemo(() => {
     const term = search.trim().toLocaleLowerCase();
@@ -133,7 +189,7 @@ export function TransactionsPanel({ workspace, canManage }: { workspace: Workspa
         ? updateTransaction(workspace.id, editing.id, input)
         : createTransaction(workspace.id, input),
     onSuccess: async () => {
-      const title = editing ? "Transaction updated" : "Transaction added";
+      const title = editing ? t("Transaction updated") : t("Transaction added");
       closeEditor();
       setToasts((current) => [...current, { id: toastKey(), title, tone: "positive" }]);
       await invalidateFinancialViews();
@@ -145,8 +201,8 @@ export function TransactionsPanel({ workspace, canManage }: { workspace: Workspa
       setDeleteTarget(undefined);
       setToasts((current) => [...current, {
         id: toastKey(),
-        title: "Transaction deleted",
-        description: "Its entries no longer affect balances.",
+        title: t("Transaction deleted"),
+        description: t("Its entries no longer affect balances."),
         tone: "positive",
       }]);
       await invalidateFinancialViews();
@@ -159,6 +215,7 @@ export function TransactionsPanel({ workspace, canManage }: { workspace: Workspa
       queryClient.invalidateQueries({ queryKey: accountsQueryKey(workspace.id) }),
       queryClient.invalidateQueries({ queryKey: financialProjectionQueryPrefix(workspace.id) }),
       queryClient.invalidateQueries({ queryKey: monthlyBudgetQueryPrefix(workspace.id) }),
+      queryClient.invalidateQueries({ queryKey: spendingAnalysisQueryPrefix(workspace.id) }),
     ]);
   }
 
@@ -173,6 +230,12 @@ export function TransactionsPanel({ workspace, canManage }: { workspace: Workspa
     setEntries([emptyEntry(accounts.data?.[0]?.id)]);
     setAllocations([]);
     setValidation("");
+    setEditorMode("simple");
+    setDetailedOrigin(undefined);
+    setDraft(emptyCaptureDraft(
+      today(),
+      suggestedAccountId(transactions.data ?? [], accounts.data ?? []),
+    ));
     save.reset();
   }
 
@@ -208,15 +271,145 @@ export function TransactionsPanel({ workspace, canManage }: { workspace: Workspa
       amount: majorAmountInput(allocation.amount_base_minor),
     })));
     setValidation("");
+    // The simple form only opens on a transaction it can reproduce exactly; everything else —
+    // a split, an adjustment, several account entries — goes straight to the detailed editor
+    // rather than being flattened into a shape it never had.
+    const captured = captureDraft(value, captureContext);
+    setDraft(captured ?? emptyCaptureDraft(value.transaction_date, value.entries[0]?.account_id));
+    setDetailedOrigin(undefined);
+    setEditorMode(captured ? "simple" : "detailed");
     save.reset();
     setEditorOpen(true);
+  }
+
+  function detailedFieldsFrom(request: TransactionWriteRequest): DetailedFields {
+    return {
+      kind: request.kind,
+      status: request.status,
+      transactionDate: request.transaction_date,
+      payee: request.payee ?? "",
+      description: request.description ?? "",
+      notes: request.notes ?? "",
+      entries: request.entries.map((entry) => ({
+        key: draftKey(),
+        accountId: entry.account_id,
+        amount: majorAmountInput(entry.amount_minor),
+        baseAmount: entry.base_amount_minor === undefined ? "" : majorAmountInput(entry.base_amount_minor),
+      })),
+      allocations: (request.allocations ?? []).map((allocation) => ({
+        key: draftKey(),
+        categoryId: allocation.category_id,
+        amount: allocation.amount_base_minor === undefined
+          ? ""
+          : majorAmountInput(allocation.amount_base_minor),
+      })),
+    };
+  }
+
+  function applyDetailedFields(fields: DetailedFields) {
+    setKind(fields.kind);
+    setStatus(fields.status);
+    setTransactionDate(fields.transactionDate);
+    setPayee(fields.payee);
+    setDescription(fields.description);
+    setNotes(fields.notes);
+    setEntries(fields.entries);
+    setAllocations(fields.allocations);
+  }
+
+  function openDetailedEditor() {
+    const result = captureRequest(draft, captureContext);
+    const fields = "request" in result ? detailedFieldsFrom(result.request) : {
+      // An incomplete draft still carries the answers already given into the wider form.
+      kind: draft.type === "transfer" ? ("transfer" as const) : ("standard" as const),
+      status: draft.pending ? ("pending" as const) : ("posted" as const),
+      transactionDate: draft.transactionDate,
+      payee: draft.payee,
+      description: draft.description,
+      notes: draft.notes,
+      entries: [emptyEntry(draft.accountId), ...(draft.type === "transfer" ? [emptyEntry(draft.toAccountId)] : [])],
+      allocations: draft.categoryId ? [emptyAllocation(draft.categoryId)] : [],
+    };
+    applyDetailedFields(fields);
+    // Remembering what the detailed editor opened with is what lets an untouched visit go
+    // straight back. An empty draft has no transaction to rebuild from, so without this the
+    // return trip would be refused for work nobody has done yet.
+    setDetailedOrigin(detailedSignature(fields));
+    setValidation("");
+    setEditorMode("detailed");
+  }
+
+  /** The detailed fields as a transaction, so the simple form can say whether it can show them. */
+  function draftFromDetailed(): CaptureDraft | undefined {
+    const built: LedgerTransaction["entries"] = [];
+    for (const entry of entries) {
+      const amount = parseMajorAmount(entry.amount);
+      const currency = accountCurrency(accounts.data ?? [], entry.accountId);
+      if (amount === null || amount === 0 || !currency) return undefined;
+      const stated = currency === workspace.base_currency ? amount : parseMajorAmount(entry.baseAmount);
+      // An amount left to the transaction date's rate is unknown here, and the simple form
+      // carries it as an empty field either way. Standing the entry amount in its place keeps
+      // the shape checks below — sign, count, reconciliation — reading what they would read if
+      // the rate were known; the draft still takes its text from the fields themselves.
+      const base = entry.baseAmount.trim() || currency === workspace.base_currency ? stated : amount;
+      if (base === null || base === 0) return undefined;
+      built.push({ account_id: entry.accountId, amount_minor: amount, base_amount_minor: base });
+    }
+    const builtAllocations: LedgerTransaction["allocations"] = [];
+    for (const allocation of allocations) {
+      const derived = allocations.length === 1 && !allocation.amount.trim();
+      const amount = derived
+        ? built.reduce((total, entry) => total + entry.base_amount_minor, 0)
+        : parseMajorAmount(allocation.amount);
+      if (!allocation.categoryId || amount === null) return undefined;
+      builtAllocations.push({ category_id: allocation.categoryId, amount_base_minor: amount });
+    }
+    const candidate = captureDraft({
+      kind,
+      status,
+      transaction_date: transactionDate,
+      ...(payee.trim() ? { payee: payee.trim() } : {}),
+      ...(description.trim() ? { description: description.trim() } : {}),
+      ...(notes.trim() ? { notes: notes.trim() } : {}),
+      entries: built,
+      allocations: builtAllocations,
+    }, captureContext);
+    return candidate && { ...candidate, baseAmount: entries[0]?.baseAmount.trim() ?? "" };
+  }
+
+  function openSimpleEditor() {
+    const untouched = detailedOrigin !== undefined && detailedOrigin === detailedSignature({
+      kind, status, transactionDate, payee, description, notes, entries, allocations,
+    });
+    if (untouched) {
+      setValidation("");
+      setEditorMode("simple");
+      return;
+    }
+    const candidate = draftFromDetailed();
+    if (!candidate) {
+      setValidation(t("This transaction needs the detailed editor. The simple form cannot show splits, several account entries, or a balance adjustment."));
+      return;
+    }
+    setDraft(candidate);
+    setValidation("");
+    setEditorMode("simple");
   }
 
   function submit(event: FormEvent) {
     event.preventDefault();
     setValidation("");
+    if (editorMode === "simple") {
+      const result = captureRequest(draft, captureContext);
+      if ("error" in result) {
+        setValidation(result.error);
+        return;
+      }
+      save.mutate(result.request);
+      return;
+    }
     if (entries.length === 0 || (kind === "transfer" && entries.length < 2)) {
-      setValidation(kind === "transfer" ? "A transfer needs at least two entries." : "Add an entry.");
+      setValidation(kind === "transfer" ? t("A transfer needs at least two entries.") : t("Add an entry."));
       return;
     }
     const parsedEntries: TransactionWriteRequest["entries"] = [];
@@ -228,8 +421,7 @@ export function TransactionsPanel({ workspace, canManage }: { workspace: Workspa
           || (baseAmount !== undefined && baseAmount !== null && baseAmount !== 0
             && Math.sign(baseAmount) !== Math.sign(amount))) {
         setValidation(
-          "Every entry needs an account and a non-zero amount with at most two decimals; "
-          + "a non-zero manual base amount must use the same sign.",
+          t("Every entry needs an account and a non-zero amount with at most two decimals; a non-zero manual base amount must use the same sign."),
         );
         return;
       }
@@ -242,12 +434,21 @@ export function TransactionsPanel({ workspace, canManage }: { workspace: Workspa
     }
     const parsedAllocations: NonNullable<TransactionWriteRequest["allocations"]> = [];
     for (const allocation of allocations) {
-      const amount = parseMajorAmount(allocation.amount);
-      if (!allocation.categoryId || amount === null || amount === 0) {
-        setValidation("Every allocation needs a category and a non-zero base-currency amount.");
+      // A single allocation may leave its amount to the server, which takes the entry total —
+      // the same allowance the entry's own base amount already has. A split cannot: dividing a
+      // transaction between categories is a decision only this form can make.
+      const derived = allocations.length === 1 && !allocation.amount.trim();
+      const amount = derived ? undefined : parseMajorAmount(allocation.amount);
+      if (!allocation.categoryId || (!derived && (amount === null || amount === 0))) {
+        setValidation(allocations.length === 1
+          ? t("Every allocation needs a category, and a non-zero base-currency amount unless it is left to the transaction date's rate.")
+          : t("Every allocation needs a category and a non-zero base-currency amount."));
         return;
       }
-      parsedAllocations.push({ category_id: allocation.categoryId, amount_base_minor: amount });
+      parsedAllocations.push({
+        category_id: allocation.categoryId,
+        ...(amount === undefined || amount === null ? {} : { amount_base_minor: amount }),
+      });
     }
     save.mutate({
       kind,
@@ -267,293 +468,341 @@ export function TransactionsPanel({ workspace, canManage }: { workspace: Workspa
     setStatusFilter("all");
   }
 
+  const activeFilterCount = (kindFilter === "all" ? 0 : 1) + (statusFilter === "all" ? 0 : 1);
   const dependenciesUnavailable = accounts.isError || categories.isError;
 
   return (
     <section className="transactions-workspace" aria-labelledby="transaction-register-heading">
       <div className="transaction-toolbar">
         <label className="transaction-search">
-          <span className="visually-hidden">Search transactions</span>
+          <span className="visually-hidden">{t("Search transactions")}</span>
           <AppIcon name="transactions" />
           <input
-            placeholder="Search payee, account, category…"
+            placeholder={t("Search payee, account, category…")}
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
         </label>
-        <label>
-          <span className="visually-hidden">Transaction kind</span>
-          <select aria-label="Transaction kind" value={kindFilter} onChange={(event) => setKindFilter(event.target.value as KindFilter)}>
-            <option value="all">All types</option>
-            <option value="standard">Expense & income</option>
-            <option value="transfer">Transfers</option>
-            <option value="adjustment">Adjustments</option>
-          </select>
-        </label>
-        <label>
-          <span className="visually-hidden">Transaction status</span>
-          <select aria-label="Transaction status" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}>
-            <option value="all">All statuses</option>
-            <option value="posted">Posted</option>
-            <option value="pending">Pending</option>
-          </select>
-        </label>
+        <details className="transaction-filter">
+          <summary>
+            <AppIcon name="filter" />
+            {activeFilterCount > 0 ? t("Filters ({count})", { count: activeFilterCount }) : t("Filters")}
+          </summary>
+          <div className="transaction-filter-panel">
+            <label>
+              {t("Transaction kind")}
+              <select value={kindFilter} onChange={(event) => setKindFilter(event.target.value as KindFilter)}>
+                <option value="all">{t("All types")}</option>
+                <option value="standard">{t("Expense & income")}</option>
+                <option value="transfer">{t("Transfers")}</option>
+                <option value="adjustment">{t("Adjustments")}</option>
+              </select>
+            </label>
+            <label>
+              {t("Transaction status")}
+              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StatusFilter)}>
+                <option value="all">{t("All statuses")}</option>
+                <option value="posted">{t("Posted")}</option>
+                <option value="pending">{t("Pending")}</option>
+              </select>
+            </label>
+            {activeFilterCount > 0 ? (
+              <button className="text-button" onClick={clearFilters} type="button">{t("Clear filters")}</button>
+            ) : null}
+          </div>
+        </details>
         {canManage ? (
           <button disabled={accounts.data?.length === 0} onClick={startCreate} type="button">
-            Add transaction
+            {t("Add transaction")}
           </button>
         ) : null}
       </div>
 
       <div className="transaction-register-heading">
         <div>
-          <p className="eyebrow">Ledger register</p>
-          <h2 id="transaction-register-heading">Activity</h2>
+          <p className="eyebrow">{t("Ledger register")}</p>
+          <h2 id="transaction-register-heading">{t("Activity")}</h2>
         </div>
-        <span>{filteredTransactions.length} of {transactions.data?.length ?? 0}</span>
+        <span>{t("{shown} of {total}", { shown: filteredTransactions.length, total: transactions.data?.length ?? 0 })}</span>
       </div>
 
       {canManage && accounts.data?.length === 0 && !accounts.isPending ? (
         <InlineNotice
-          action={<Link to={`/workspaces/${workspace.id}/accounts`}>Add account</Link>}
-          title="An account is required"
+          action={<Link to={`/workspaces/${workspace.id}/accounts`}>{t("Add account")}</Link>}
+          title={t("An account is required")}
           tone="warning"
-        >Create an account before recording a transaction.</InlineNotice>
+        >{t("Create an account before recording a transaction.")}</InlineNotice>
       ) : null}
       {!canManage ? (
-        <InlineNotice title="Read-only access">You can review and filter activity, but only workspace managers can change it.</InlineNotice>
+        <InlineNotice title={t("Read-only access")}>{t("You can review and filter activity, but only workspace managers can change it.")}</InlineNotice>
       ) : null}
-      {transactions.isPending ? <LoadingState label="Loading transactions" rows={5} /> : null}
+      {transactions.isPending ? <LoadingState label={t("Loading transactions")} rows={5} /> : null}
       {transactions.error ? <InlineNotice tone="danger">{transactions.error.message}</InlineNotice> : null}
       {!transactions.isPending && !transactions.error && transactions.data?.length === 0 ? (
         <EmptyState
-          action={canManage && accounts.data?.length ? <button onClick={startCreate} type="button">Add transaction</button> : undefined}
-          description="Expenses, income, transfers, and adjustments will appear here."
+          action={canManage && accounts.data?.length ? <button onClick={startCreate} type="button">{t("Add transaction")}</button> : undefined}
+          description={t("Expenses, income, transfers, and adjustments will appear here.")}
           icon="transactions"
-          title="No transactions yet"
+          title={t("No transactions yet")}
         />
       ) : null}
       {Boolean(transactions.data?.length) && filteredTransactions.length === 0 ? (
         <EmptyState
-          action={<button className="secondary-button" onClick={clearFilters} type="button">Clear filters</button>}
-          description="Try a different search term, type, or status."
+          action={<button className="secondary-button" onClick={clearFilters} type="button">{t("Clear filters")}</button>}
+          description={t("Try a different search term, type, or status.")}
           icon="transactions"
-          title="No matching transactions"
+          title={t("No matching transactions")}
         />
       ) : null}
 
       <div className="transaction-register">
-        {filteredTransactions.map((value) => (
-          <TransactionRegisterRow
-            accountNames={accountNames}
-            canManage={canManage}
-            categoryNames={categoryNames}
-            key={value.id}
-            onDelete={() => setDeleteTarget(value)}
-            onEdit={() => edit(value)}
-            transaction={value}
-            workspace={workspace}
-          />
+        {transactionDayGroups(filteredTransactions).map((group) => (
+          <section className="transaction-day" key={group.date}>
+            <h3 className="transaction-day-heading">
+              <span>{formatTransactionDate(group.date)}</span>
+              {group.total === 0 ? null : (
+                <MoneyAmount amount={group.total} currency={workspace.base_currency} signed />
+              )}
+            </h3>
+            {group.transactions.map((value) => (
+              <TransactionRegisterRow
+                accountNames={accountNames}
+                canManage={canManage}
+                categoryNames={categoryNames}
+                categoryById={categoryById}
+                key={value.id}
+                onDelete={() => setDeleteTarget(value)}
+                onEdit={() => edit(value)}
+                showAccount={(accounts.data?.length ?? 0) > 1}
+                transaction={value}
+                workspace={workspace}
+              />
+            ))}
+          </section>
         ))}
       </div>
       {remove.error ? <InlineNotice tone="danger">{mutationMessage(remove.error)}</InlineNotice> : null}
 
       <ModalDialog
-        description="Entries affect account balances; allocations affect spending, income, and budget reporting."
+        description={editorMode === "simple"
+          ? t("Enter what you spent or received. Budget records the account and category effects for you.")
+          : t("Entries affect account balances; allocations affect spending, income, and budget reporting.")}
         footer={(
           <>
-            <button className="secondary-button" onClick={closeEditor} type="button">Cancel</button>
+            <button className="secondary-button" onClick={closeEditor} type="button">{t("Cancel")}</button>
             <button
               disabled={save.isPending || accounts.data?.length === 0}
               form="transaction-editor-form"
               type="submit"
             >
-              {save.isPending ? "Saving…" : editing ? "Save transaction" : "Add transaction"}
+              {save.isPending ? t("Saving…") : editing ? t("Save transaction") : t("Add transaction")}
             </button>
           </>
         )}
         onClose={closeEditor}
         open={editorOpen}
         placement="drawer"
-        title={editing ? "Edit transaction" : "Add transaction"}
+        title={editing ? t("Edit transaction") : t("Add transaction")}
       >
         <form className="transaction-editor-form" id="transaction-editor-form" onSubmit={submit}>
           {dependenciesUnavailable ? (
-            <InlineNotice tone="danger">Accounts or categories could not be loaded for this editor.</InlineNotice>
+            <InlineNotice tone="danger">{t("Accounts or categories could not be loaded for this editor.")}</InlineNotice>
           ) : null}
-          <div className="form-columns transaction-basics">
+          {editorMode === "simple" ? (
+            <TransactionCaptureForm
+              accounts={accounts.data ?? []}
+              categories={categories.data ?? []}
+              draft={draft}
+              frequentCategories={frequentCategories}
+              onChange={(patch) => setDraft((current) => ({ ...current, ...patch }))}
+              onDetailed={openDetailedEditor}
+              workspace={workspace}
+            />
+          ) : (
+            <>
+            <div className="form-columns transaction-basics">
+              <label>
+                {t("Kind")}
+                <select
+                  value={kind}
+                  onChange={(event) => {
+                    const next = event.target.value as typeof kind;
+                    setKind(next);
+                    if (next === "transfer") {
+                      setAllocations([]);
+                      setEntries((current) => current.length >= 2
+                        ? current
+                        : [...current, emptyEntry(accounts.data?.[1]?.id ?? accounts.data?.[0]?.id)]);
+                    }
+                  }}
+                >
+                  <option value="standard">{t("Expense or income")}</option>
+                  <option value="transfer">{t("Transfer")}</option>
+                  <option value="adjustment">{t("Balance adjustment")}</option>
+                </select>
+              </label>
+              <label>
+                {t("Status")}
+                <select value={status} onChange={(event) => setStatus(event.target.value as typeof status)}>
+                  <option value="posted">{t("Posted")}</option>
+                  <option value="pending">{t("Pending")}</option>
+                </select>
+              </label>
+              <label>
+                {t("Date")}
+                <input required type="date" value={transactionDate} onChange={(event) => setTransactionDate(event.target.value)} />
+              </label>
+              <label>
+                {t("Payee (optional)")}
+                <input maxLength={200} value={payee} onChange={(event) => setPayee(event.target.value)} />
+              </label>
+            </div>
             <label>
-              Kind
-              <select
-                value={kind}
-                onChange={(event) => {
-                  const next = event.target.value as typeof kind;
-                  setKind(next);
-                  if (next === "transfer") {
-                    setAllocations([]);
-                    setEntries((current) => current.length >= 2
-                      ? current
-                      : [...current, emptyEntry(accounts.data?.[1]?.id ?? accounts.data?.[0]?.id)]);
-                  }
-                }}
-              >
-                <option value="standard">Expense or income</option>
-                <option value="transfer">Transfer</option>
-                <option value="adjustment">Balance adjustment</option>
-              </select>
+              {t("Description (optional)")}
+              <input maxLength={500} value={description} onChange={(event) => setDescription(event.target.value)} />
             </label>
-            <label>
-              Status
-              <select value={status} onChange={(event) => setStatus(event.target.value as typeof status)}>
-                <option value="posted">Posted</option>
-                <option value="pending">Pending</option>
-              </select>
-            </label>
-            <label>
-              Date
-              <input required type="date" value={transactionDate} onChange={(event) => setTransactionDate(event.target.value)} />
-            </label>
-            <label>
-              Payee (optional)
-              <input maxLength={200} value={payee} onChange={(event) => setPayee(event.target.value)} />
-            </label>
-          </div>
-          <label>
-            Description (optional)
-            <input maxLength={500} value={description} onChange={(event) => setDescription(event.target.value)} />
-          </label>
 
-          <fieldset className="transaction-lines">
-            <legend>Account entries</legend>
-            <p>Use negative amounts for money leaving an account and positive amounts for money entering it.</p>
-            {entries.map((entry, index) => {
-              const currency = accountCurrency(accounts.data ?? [], entry.accountId);
-              return (
-                <div className="transaction-line" key={entry.key}>
-                  <label>
-                    Account
-                    <select
-                      required
-                      value={entry.accountId}
-                      onChange={(event) => setEntries((current) => current.map((item) =>
-                        item.key === entry.key ? { ...item, accountId: event.target.value, baseAmount: "" } : item,
-                      ))}
-                    >
-                      <option value="">Choose an account</option>
-                      {accounts.data?.map((account) => (
-                        <option key={account.id} value={account.id}>{account.name} · {account.currency}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Amount {currency ? `(${currency})` : ""}
-                    <input
-                      inputMode="decimal"
-                      placeholder="-12.50"
-                      required
-                      value={entry.amount}
-                      onChange={(event) => setEntries((current) => current.map((item) =>
-                        item.key === entry.key ? { ...item, amount: event.target.value } : item,
-                      ))}
-                    />
-                  </label>
-                  {currency && currency !== workspace.base_currency ? (
+            <fieldset className="transaction-lines">
+              <legend>{t("Account entries")}</legend>
+              <p>{t("Use negative amounts for money leaving an account and positive amounts for money entering it.")}</p>
+              {entries.map((entry, index) => {
+                const currency = accountCurrency(accounts.data ?? [], entry.accountId);
+                return (
+                  <div className="transaction-line" key={entry.key}>
                     <label>
-                      Base amount ({workspace.base_currency}, optional)
+                      {t("Account")}
+                      <select
+                        required
+                        value={entry.accountId}
+                        onChange={(event) => setEntries((current) => current.map((item) =>
+                          item.key === entry.key ? { ...item, accountId: event.target.value, baseAmount: "" } : item,
+                        ))}
+                      >
+                        <option value="">{t("Choose an account")}</option>
+                        {accounts.data?.map((account) => (
+                          <option key={account.id} value={account.id}>{account.name} · {account.currency}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      {t("Amount")} {currency ? `(${currency})` : ""}
                       <input
                         inputMode="decimal"
-                        placeholder="Auto historical rate"
-                        value={entry.baseAmount}
+                        placeholder="-12.50"
+                        required
+                        value={entry.amount}
                         onChange={(event) => setEntries((current) => current.map((item) =>
-                          item.key === entry.key ? { ...item, baseAmount: event.target.value } : item,
+                          item.key === entry.key ? { ...item, amount: event.target.value } : item,
                         ))}
                       />
                     </label>
-                  ) : null}
-                  {entries.length > 1 ? (
-                    <button className="text-button danger" onClick={() => setEntries((current) => current.filter((item) => item.key !== entry.key))} type="button">
-                      Remove entry {index + 1}
-                    </button>
-                  ) : null}
-                </div>
-              );
-            })}
-            <button className="secondary-button line-button" onClick={() => setEntries((current) => [...current, emptyEntry(accounts.data?.[0]?.id)])} type="button">
-              Add account entry
-            </button>
-          </fieldset>
-
-          {kind !== "transfer" ? (
-            <fieldset className="transaction-lines">
-              <legend>Category allocations</legend>
-              <p>Amounts are in {workspace.base_currency}. Leave empty on a standard transaction to use Uncategorized automatically.</p>
-              {allocations.map((allocation, index) => (
-                <div className="transaction-line" key={allocation.key}>
-                  <label>
-                    Category
-                    <select
-                      required
-                      value={allocation.categoryId}
-                      onChange={(event) => setAllocations((current) => current.map((item) =>
-                        item.key === allocation.key ? { ...item, categoryId: event.target.value } : item,
-                      ))}
-                    >
-                      <option value="">Choose a category</option>
-                      {categories.data?.map((category) => (
-                        <option key={category.id} value={category.id}>{category.name} · {category.kind}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Base amount ({workspace.base_currency})
-                    <input
-                      inputMode="decimal"
-                      placeholder="-12.50"
-                      required
-                      value={allocation.amount}
-                      onChange={(event) => setAllocations((current) => current.map((item) =>
-                        item.key === allocation.key ? { ...item, amount: event.target.value } : item,
-                      ))}
-                    />
-                  </label>
-                  <button className="text-button danger" onClick={() => setAllocations((current) => current.filter((item) => item.key !== allocation.key))} type="button">
-                    Remove allocation {index + 1}
-                  </button>
-                </div>
-              ))}
-              <button className="secondary-button line-button" onClick={() => setAllocations((current) => [...current, emptyAllocation(categories.data?.[0]?.id)])} type="button">
-                Add category allocation
+                    {currency && currency !== workspace.base_currency ? (
+                      <label>
+                        {t("Base amount ({currency}, optional)", { currency: workspace.base_currency })}
+                        <input
+                          inputMode="decimal"
+                          placeholder={t("Auto historical rate")}
+                          value={entry.baseAmount}
+                          onChange={(event) => setEntries((current) => current.map((item) =>
+                            item.key === entry.key ? { ...item, baseAmount: event.target.value } : item,
+                          ))}
+                        />
+                      </label>
+                    ) : null}
+                    {entries.length > 1 ? (
+                      <button className="text-button danger" onClick={() => setEntries((current) => current.filter((item) => item.key !== entry.key))} type="button">
+                        {t("Remove entry {number}", { number: index + 1 })}
+                      </button>
+                    ) : null}
+                  </div>
+                );
+              })}
+              <button className="secondary-button line-button" onClick={() => setEntries((current) => [...current, emptyEntry(accounts.data?.[0]?.id)])} type="button">
+                {t("Add account entry")}
               </button>
             </fieldset>
-          ) : null}
-          <label>
-            Notes (optional)
-            <input maxLength={4000} value={notes} onChange={(event) => setNotes(event.target.value)} />
-          </label>
+
+            {kind !== "transfer" ? (
+              <fieldset className="transaction-lines">
+                <legend>{t("Category allocations")}</legend>
+                <p>{t("Amounts are in {currency}. Leave the whole section empty on a standard transaction to use Uncategorized automatically, or leave a single allocation's amount empty to book it at the transaction date's rate.", { currency: workspace.base_currency })}</p>
+                {allocations.map((allocation, index) => (
+                  <div className="transaction-line" key={allocation.key}>
+                    <label>
+                      {t("Category")}
+                      <select
+                        required
+                        value={allocation.categoryId}
+                        onChange={(event) => setAllocations((current) => current.map((item) =>
+                          item.key === allocation.key ? { ...item, categoryId: event.target.value } : item,
+                        ))}
+                      >
+                        <option value="">{t("Choose a category")}</option>
+                        {(["expense", "income"] as const).map((categoryKind) => (
+                          <optgroup key={categoryKind} label={t(`transactions.${categoryKind}Categories`)}>
+                            {categories.data?.filter((category) => category.kind === categoryKind).map((category) => (
+                              <option key={category.id} value={category.id}>{categoryName(category)}</option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                      {categoryById.get(allocation.categoryId) ? <CategoryLabel {...categoryAppearance(categoryById.get(allocation.categoryId)!)} /> : null}
+                    </label>
+                    <label>
+                      {t("Base amount ({currency})", { currency: workspace.base_currency })}
+                      <input
+                        inputMode="decimal"
+                        placeholder={allocations.length === 1 ? t("Rate for that date") : "-12.50"}
+                        required={allocations.length > 1}
+                        value={allocation.amount}
+                        onChange={(event) => setAllocations((current) => current.map((item) =>
+                          item.key === allocation.key ? { ...item, amount: event.target.value } : item,
+                        ))}
+                      />
+                    </label>
+                    <button className="text-button danger" onClick={() => setAllocations((current) => current.filter((item) => item.key !== allocation.key))} type="button">
+                      {t("Remove allocation {number}", { number: index + 1 })}
+                    </button>
+                  </div>
+                ))}
+                <button className="secondary-button line-button" onClick={() => setAllocations((current) => [...current, emptyAllocation(categories.data?.[0]?.id)])} type="button">
+                  {t("Add category allocation")}
+                </button>
+              </fieldset>
+            ) : null}
+            <label>
+              {t("Notes (optional)")}
+              <input maxLength={4000} value={notes} onChange={(event) => setNotes(event.target.value)} />
+            </label>
+              <button className="text-button" onClick={openSimpleEditor} type="button">
+                {t("Back to the simple form")}
+              </button>
+            </>
+          )}
           {validation ? <InlineNotice tone="danger">{validation}</InlineNotice> : null}
           {save.error ? <InlineNotice tone="danger">{mutationMessage(save.error)}</InlineNotice> : null}
         </form>
       </ModalDialog>
 
       <ModalDialog
-        description="This is a soft deletion. The transaction remains recoverable in storage, but stops affecting balances and reports."
+        description={t("This is a soft deletion. The transaction remains recoverable in storage, but stops affecting balances and reports.")}
         footer={(
           <>
-            <button className="secondary-button" onClick={() => setDeleteTarget(undefined)} type="button">Cancel</button>
+            <button className="secondary-button" onClick={() => setDeleteTarget(undefined)} type="button">{t("Cancel")}</button>
             <button
               className="danger-button"
               disabled={remove.isPending}
               onClick={() => deleteTarget && remove.mutate(deleteTarget.id)}
               type="button"
-            >{remove.isPending ? "Deleting…" : "Delete transaction"}</button>
+            >{remove.isPending ? t("Deleting…") : t("Delete transaction")}</button>
           </>
         )}
         onClose={() => setDeleteTarget(undefined)}
         open={Boolean(deleteTarget)}
-        title="Delete this transaction?"
+        title={t("Delete this transaction?")}
       >
-        <p><strong>{deleteTarget ? transactionTitle(deleteTarget) : "Transaction"}</strong> will stop affecting account balances, budgets, and reports.</p>
+        <p>{t("{transaction} will stop affecting account balances, budgets, and reports.", { transaction: deleteTarget ? transactionTitle(deleteTarget) : t("Transaction") })}</p>
       </ModalDialog>
 
       <ToastRegion
@@ -568,52 +817,60 @@ function TransactionRegisterRow({
   accountNames,
   canManage,
   categoryNames,
+  categoryById,
   onDelete,
   onEdit,
+  showAccount,
   transaction,
   workspace,
 }: {
   accountNames: Map<string, string>;
   canManage: boolean;
   categoryNames: Map<string, string>;
+  categoryById: Map<string, import("../../api/client").Category>;
   onDelete: () => void;
   onEdit: () => void;
+  showAccount: boolean;
   transaction: LedgerTransaction;
   workspace: Workspace;
 }) {
   const total = transactionTotal(transaction);
-  const accounts = transaction.entries
-    .map((entry) => accountNames.get(entry.account_id) ?? "Unavailable account")
-    .join(" → ");
   const categories = transaction.allocations
-    .map((allocation) => categoryNames.get(allocation.category_id) ?? "Unavailable category")
-    .join(", ");
+    .map((allocation) => categoryById.get(allocation.category_id))
+    .filter((category) => category !== undefined);
   const direction = transactionDirection(transaction, total);
   return (
     <article className="transaction-register-row">
-      <span aria-hidden="true" className={`transaction-direction transaction-direction-${direction}`}>
-        <AppIcon name={transaction.kind === "transfer" ? "accounts" : "transactions"} />
-      </span>
+      {categories[0] ? (
+        <CategoryAppearance
+          colorKey={categories[0].color_key}
+          iconType={categories[0].icon_type}
+          iconValue={categories[0].icon_value ?? categories[0].icon}
+        />
+      ) : (
+        <span aria-hidden="true" className={`transaction-direction transaction-direction-${direction}`}>
+          <AppIcon name={transaction.kind === "transfer" ? "accounts" : "transactions"} />
+        </span>
+      )}
       <div className="transaction-register-copy">
         <div>
-          <strong>{transactionTitle(transaction)}</strong>
+          <strong>{transactionTitle(transaction, categoryNames)}</strong>
           <span className="transaction-register-badges">
-            <StatusBadge tone={transaction.status === "pending" ? "warning" : "positive"}>{transaction.status}</StatusBadge>
+            {transaction.status === "pending" ? <StatusBadge tone="warning">{t("Pending")}</StatusBadge> : null}
             {transaction.kind !== "standard" ? <StatusBadge>{transactionKindLabel(transaction.kind)}</StatusBadge> : null}
           </span>
         </div>
-        <small>{formatTransactionDate(transaction.transaction_date)} · {accounts}</small>
-        {categories ? <small>{categories}</small> : null}
+        <small>{transactionSupportingLine(transaction, { accountNames, categoryNames, showAccount })}</small>
       </div>
       <div className="transaction-register-amount">
-        {transaction.kind === "transfer" ? <span>Transfer</span> : total === null ? <span>Amount unavailable</span> : (
+        {transaction.kind === "transfer" ? <span>{t("Transfer")}</span> : total === null ? <span>{t("Amount unavailable")}</span> : (
           <MoneyAmount amount={total} currency={workspace.base_currency} signed />
         )}
       </div>
       {canManage ? (
         <div className="transaction-register-actions">
-          <button className="text-button" onClick={onEdit} type="button">Edit</button>
-          <button className="text-button danger" onClick={onDelete} type="button">Delete</button>
+          <button className="text-button" onClick={onEdit} type="button">{t("Edit")}</button>
+          <button className="text-button danger" onClick={onDelete} type="button">{t("Delete")}</button>
         </div>
       ) : null}
     </article>
@@ -624,14 +881,77 @@ function accountCurrency(accounts: Account[], accountId: string) {
   return accounts.find((account) => account.id === accountId)?.currency;
 }
 
-function transactionTitle(transaction: LedgerTransaction) {
-  return transaction.payee ?? transaction.description ?? transactionKindLabel(transaction.kind);
+function categoryAppearance(category: import("../../api/client").Category) {
+  return { colorKey: category.color_key, iconType: category.icon_type, iconValue: category.icon_value ?? category.icon, name: categoryName(category) };
+}
+
+function transactionTitle(transaction: LedgerTransaction, categoryNames?: Map<string, string>) {
+  return transaction.payee
+    ?? transaction.description
+    ?? (categoryNames && transaction.allocations[0]
+      ? categoryNames.get(transaction.allocations[0].category_id)
+      : undefined)
+    ?? transactionKindLabel(transaction.kind);
+}
+
+/**
+ * One supporting line rather than three. The date already heads the day's group, so the line
+ * carries the category — or the account when the category is already the title. This mirrors
+ * the iOS register so a row reads the same on either client.
+ */
+function transactionSupportingLine(
+  transaction: LedgerTransaction,
+  { accountNames, categoryNames, showAccount }: {
+    accountNames: Map<string, string>;
+    categoryNames: Map<string, string>;
+    showAccount: boolean;
+  },
+) {
+  const parts: string[] = [];
+  const named = transaction.payee ?? transaction.description;
+  const categoryTitle = transaction.allocations[0]
+    ? categoryNames.get(transaction.allocations[0].category_id) ?? t("Unavailable category")
+    : undefined;
+  const accounts = transaction.entries
+    .map((entry) => accountNames.get(entry.account_id) ?? t("Unavailable account"))
+    .join(" → ");
+  if (named && categoryTitle) {
+    parts.push(categoryTitle);
+    if (showAccount && accounts) parts.push(accounts);
+  } else if (accounts) {
+    parts.push(accounts);
+  }
+  if (parts.length === 0) parts.push(transactionKindLabel(transaction.kind));
+  if (transaction.allocations.length > 1) parts.push(`+${transaction.allocations.length - 1}`);
+  return parts.join(" · ");
+}
+
+/**
+ * The register in the order the ledger returned it, cut into days. A day's reading excludes
+ * transfers for the same reason every other total does: moving your own money is not spending.
+ */
+function transactionDayGroups(transactions: LedgerTransaction[]) {
+  const groups: { date: string; total: number; transactions: LedgerTransaction[] }[] = [];
+  const byDate = new Map<string, { date: string; total: number; transactions: LedgerTransaction[] }>();
+  for (const transaction of transactions) {
+    let group = byDate.get(transaction.transaction_date);
+    if (!group) {
+      group = { date: transaction.transaction_date, total: 0, transactions: [] };
+      byDate.set(transaction.transaction_date, group);
+      groups.push(group);
+    }
+    group.transactions.push(transaction);
+    if (transaction.kind === "transfer") continue;
+    const next = group.total + (transactionTotal(transaction) ?? 0);
+    if (Number.isSafeInteger(next)) group.total = next;
+  }
+  return groups;
 }
 
 function transactionKindLabel(kind: LedgerTransaction["kind"]) {
-  if (kind === "standard") return "Expense or income";
-  if (kind === "transfer") return "Transfer";
-  return "Balance adjustment";
+  if (kind === "standard") return t("Expense or income");
+  if (kind === "transfer") return t("Transfer");
+  return t("Balance adjustment");
 }
 
 function transactionTotal(transaction: LedgerTransaction): number | null {
@@ -658,5 +978,5 @@ function formatTransactionDate(value: string) {
 }
 
 function mutationMessage(error: Error) {
-  return error instanceof APIError ? error.message : "The change could not be saved.";
+  return error instanceof APIError ? error.message : t("The change could not be saved.");
 }

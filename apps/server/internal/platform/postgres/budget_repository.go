@@ -214,7 +214,9 @@ func loadBudgetSnapshot(
 		}
 		items = append(items, budget.ItemSnapshot{
 			ID: itemID, CategoryID: categoryID, CategoryName: row.CategoryName,
-			CategoryIcon:              stringPointer(row.CategoryIcon),
+			CategoryPredefinedKey: stringPointer(row.CategoryPredefinedKey),
+			CategoryIcon:          stringPointer(row.CategoryIcon), CategoryIconType: row.CategoryIconType,
+			CategoryIconValue: row.CategoryIconValue, CategoryColorKey: row.CategoryColorKey,
 			CategoryArchivedAt:        timePointer(row.CategoryArchivedAt),
 			PlannedBaseMinor:          row.PlannedBaseMinor,
 			SignedAllocationBaseMinor: row.SignedAllocationBaseMinor,

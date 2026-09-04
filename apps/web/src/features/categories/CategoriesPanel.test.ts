@@ -11,6 +11,9 @@ function category(id: string, parentId?: string): Category {
     workspace_id: "0198b7ae-5e93-72d8-99af-ff40c48ad342",
     name: id,
     kind: "expense",
+    icon_type: "system",
+    icon_value: "ellipsis",
+    color_key: "slate",
     ...(parentId ? { parent_id: parentId } : {}),
   };
 }

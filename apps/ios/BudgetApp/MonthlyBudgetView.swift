@@ -18,67 +18,64 @@ struct MonthlyBudgetView: View {
     }
 
     var body: some View {
-        List {
-            Section {
-                HStack {
-                    Button("Previous month", systemImage: "chevron.left") {
-                        shiftMonth(by: -1)
-                    }
-                    .labelStyle(.iconOnly)
-                    .frame(minWidth: 44, minHeight: 44)
-                    Spacer()
-                    Text(budgetMonthLabel(month))
-                        .font(.headline)
-                        .accessibilityAddTraits(.isHeader)
-                    Spacer()
-                    Button("Next month", systemImage: "chevron.right") {
-                        shiftMonth(by: 1)
-                    }
-                    .labelStyle(.iconOnly)
-                    .frame(minWidth: 44, minHeight: 44)
-                }
-            } footer: {
-                Text("Calendar month in \(workspace.timezone). Posted allocations determine usage; pending transactions are excluded.")
-            }
+        ScrollView {
+            VStack(alignment: .leading, spacing: BudgetTheme.Space.section) {
+                monthSwitcher
 
-            if model.isLoadingBudget {
-                Section {
-                    HStack {
-                        Spacer()
-                        ProgressView("Loading monthly budget…")
-                        Spacer()
+                if model.isLoadingBudget {
+                    BudgetCard { BudgetLoading("Loading monthly budget…") }
+                } else if let message = model.budgetErrorMessage {
+                    BudgetCard {
+                        BudgetMessage(
+                            title: "Budget unavailable",
+                            systemImage: "chart.pie.fill",
+                            message: .resolved(message),
+                            action: ("Try again", reload)
+                        )
                     }
-                }
-            } else if let message = model.budgetErrorMessage {
-                Section {
-                    ContentUnavailableView(
-                        "Budget unavailable",
-                        systemImage: "chart.pie.fill",
-                        description: Text(message)
-                    )
-                    Button("Try again") { reload() }
-                }
-            } else if let plan = model.monthlyBudget, plan.month == month {
-                MonthlyBudgetUsageSections(plan: plan)
-                if !canManage {
-                    viewerSection
-                }
-            } else {
-                Section {
-                    ContentUnavailableView(
-                        "No monthly plan",
-                        systemImage: "chart.pie",
-                        description: Text("Create a spending plan for this calendar month.")
-                    )
-                    if canManage {
-                        Button("Create monthly plan", systemImage: "plus") {
-                            editorPresented = true
+                } else if let plan = displayedPlan {
+                    BudgetSection(
+                        "Posted usage",
+                        caption: "Refunds reduce usage. Remaining values can be negative when a category is over plan."
+                    ) {
+                        BudgetCard { BudgetPlanSummary(plan: plan) }
+                    }
+
+                    BudgetSection("Category progress") {
+                        if plan.items.isEmpty {
+                            BudgetCard {
+                                BudgetMessage(
+                                    title: "No categories planned",
+                                    systemImage: "tag",
+                                    message: "Add an expense category to this plan."
+                                )
+                            }
+                        } else {
+                            BudgetRowGroup(items: plan.items) { item in
+                                MonthlyBudgetItemRow(plan: plan, item: item)
+                            }
                         }
                     }
+                } else {
+                    BudgetCard {
+                        BudgetMessage(
+                            title: "No monthly plan",
+                            systemImage: "chart.pie",
+                            message: "Create a spending plan for this calendar month.",
+                            action: canManage
+                                ? ("Create monthly plan", { editorPresented = true })
+                                : nil
+                        )
+                    }
                 }
-                if !canManage { viewerSection }
+
+                if !canManage { viewerNotice }
             }
+            .padding(.horizontal, BudgetTheme.Space.screen)
+            .padding(.top, 4)
+            .padding(.bottom, 32)
         }
+        .budgetScreen()
         .navigationTitle("Budget")
         .toolbar {
             if canManage && !model.isLoadingBudget && model.budgetErrorMessage == nil {
@@ -111,11 +108,45 @@ struct MonthlyBudgetView: View {
         }
     }
 
-    private var viewerSection: some View {
-        Section {
-            Label("Viewer access can review usage but cannot change the plan.", systemImage: "eye")
-                .foregroundStyle(.secondary)
+    /// The month is the screen's primary control, so it gets a card of its own rather than a
+    /// row buried in a list.
+    private var monthSwitcher: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 0) {
+                monthStepButton("Previous month", systemImage: "chevron.left", offset: -1)
+                Spacer(minLength: 8)
+                Text(budgetMonthLabel(month))
+                    .font(.headline)
+                    .foregroundStyle(BudgetTheme.primaryText)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 8)
+                monthStepButton("Next month", systemImage: "chevron.right", offset: 1)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .budgetSurface(radius: BudgetTheme.Radius.medium)
+
+            Text("Calendar month in \(workspace.timezone). Pending transactions are excluded from usage.")
+                .font(.caption)
+                .foregroundStyle(BudgetTheme.tertiaryText)
+                .padding(.horizontal, 2)
         }
+    }
+
+    private func monthStepButton(_ title: String, systemImage: String, offset: Int) -> some View {
+        Button(title, systemImage: systemImage) { shiftMonth(by: offset) }
+            .labelStyle(.iconOnly)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(BudgetTheme.forest)
+            .frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
+    }
+
+    private var viewerNotice: some View {
+        Label("Viewer access can review usage but cannot change the plan.", systemImage: "eye")
+            .font(.caption)
+            .foregroundStyle(BudgetTheme.tertiaryText)
+            .padding(.horizontal, 2)
     }
 
     private var displayedPlan: MonthlyBudgetPlan? {
@@ -132,200 +163,70 @@ struct MonthlyBudgetView: View {
         calendar.timeZone = TimeZone(identifier: workspace.timezone) ?? .current
         selectedMonth = calendar.date(byAdding: .month, value: value, to: selectedMonth) ?? selectedMonth
     }
-
 }
 
-private struct MonthlyBudgetUsageSections: View {
+private struct MonthlyBudgetItemRow: View {
     let plan: MonthlyBudgetPlan
-
-    var body: some View {
-        Section {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(plan.name)
-                        .font(.title3.weight(.semibold))
-                    Spacer(minLength: 12)
-                    BudgetUsageStateLabel(state: usage.state)
-                }
-                ProgressView(value: usage.progress)
-                    .tint(usageColor)
-                    .accessibilityLabel("Monthly budget usage")
-                    .accessibilityValue(
-                        "\(plan.baseCurrency.formatted(minorUnits: plan.usedBaseMinor)) used of "
-                        + plan.baseCurrency.formatted(minorUnits: plan.plannedBaseMinor)
-                    )
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 12)], spacing: 8) {
-                    BudgetSummaryValue(title: "Planned", amount: plan.plannedBaseMinor, currency: plan.baseCurrency)
-                    BudgetSummaryValue(title: "Used", amount: plan.usedBaseMinor, currency: plan.baseCurrency)
-                    BudgetSummaryValue(title: "Remaining", amount: plan.remainingBaseMinor, currency: plan.baseCurrency)
-                }
-            }
-            .padding(18)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
-            .accessibilityElement(children: .contain)
-            .listRowInsets(EdgeInsets())
-            .listRowBackground(Color.clear)
-        } header: {
-            Text("Posted usage")
-        } footer: {
-            Text("Refunds reduce usage. Remaining values can be negative when a category is over plan.")
-        }
-
-        Section("Category progress") {
-            ForEach(plan.items) { item in
-                let itemUsage = BudgetUsagePresentation(
-                    planned: item.plannedBaseMinor,
-                    used: item.usedBaseMinor,
-                    remaining: item.remainingBaseMinor
-                )
-                VStack(alignment: .leading, spacing: 7) {
-                    BudgetItemHeader(plan: plan, item: item)
-                    ProgressView(value: progress(item))
-                        .tint(color(itemUsage.state))
-                        .accessibilityLabel("\(item.categoryName) budget usage")
-                        .accessibilityValue(
-                            "\(plan.baseCurrency.formatted(minorUnits: item.usedBaseMinor)) of "
-                            + plan.baseCurrency.formatted(minorUnits: item.plannedBaseMinor)
-                        )
-                    Text("\(plan.baseCurrency.formatted(minorUnits: item.remainingBaseMinor)) remaining")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(
-                            itemUsage.state == .overspent ? Color.red : Color.secondary
-                        )
-                    if itemUsage.state == .refundCredit {
-                        Text("Refund credit reduces posted usage")
-                            .font(.caption)
-                            .foregroundStyle(.green)
-                    }
-                }
-                .padding(.vertical, 4)
-                .accessibilityElement(children: .contain)
-            }
-        }
-    }
+    let item: MonthlyBudgetItem
 
     private var usage: BudgetUsagePresentation {
-        BudgetUsagePresentation(
-            planned: plan.plannedBaseMinor,
-            used: plan.usedBaseMinor,
-            remaining: plan.remainingBaseMinor
-        )
-    }
-
-    private var usageColor: Color { color(usage.state) }
-
-    private func progress(_ item: MonthlyBudgetItem) -> Double {
         BudgetUsagePresentation(
             planned: item.plannedBaseMinor,
             used: item.usedBaseMinor,
             remaining: item.remainingBaseMinor
-        ).progress
+        )
     }
-
-    private func color(_ state: BudgetUsageState) -> Color {
-        switch state {
-        case .noTarget: .secondary
-        case .onTrack: .green
-        case .overspent: .red
-        case .refundCredit: .mint
-        }
-    }
-}
-
-private struct BudgetItemHeader: View {
-    let plan: MonthlyBudgetPlan
-    let item: MonthlyBudgetItem
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .firstTextBaseline) {
-                category
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center, spacing: 12) {
+                CategoryNameLabel(
+                    name: item.categoryName,
+                    kind: nil,
+                    predefinedKey: item.categoryPredefinedKey,
+                    systemKey: nil,
+                    iconType: item.categoryIconType,
+                    iconValue: item.categoryIconValue,
+                    colorKey: item.categoryColorKey,
+                    iconSize: 32
+                )
+                .font(.subheadline.weight(.semibold))
                 Spacer(minLength: 12)
-                amounts
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(plan.baseCurrency.formatted(minorUnits: item.usedBaseMinor))
+                        .font(.budgetAmount)
+                        .foregroundStyle(BudgetTheme.primaryText)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                    Text("of \(plan.baseCurrency.formatted(minorUnits: item.plannedBaseMinor))")
+                        .font(.caption)
+                        .foregroundStyle(BudgetTheme.tertiaryText)
+                        .lineLimit(1)
+                }
             }
-            VStack(alignment: .leading, spacing: 6) {
-                category
-                amounts
+            BudgetMeter(progress: usage.progress, tint: budgetUsageColor(usage.state))
+            HStack(spacing: 8) {
+                Text("\(plan.baseCurrency.formatted(minorUnits: item.remainingBaseMinor)) remaining")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(
+                        usage.state == .overspent ? BudgetTheme.over : BudgetTheme.tertiaryText
+                    )
+                if item.categoryArchivedAt != nil {
+                    BudgetChip(text: "Archived", color: BudgetTheme.tertiaryText)
+                }
+                if usage.state == .refundCredit {
+                    BudgetChip(text: "Refund credit", color: BudgetTheme.sage)
+                }
+                Spacer(minLength: 0)
             }
         }
-    }
-
-    private var category: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text((item.categoryIcon.map { "\($0) " } ?? "") + item.categoryName)
-                .font(.headline)
-            Text((item.categoryArchivedAt == nil ? "" : "Archived · ") + "Includes subcategories")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private var amounts: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(plan.baseCurrency.formatted(minorUnits: item.usedBaseMinor))
-                .font(.subheadline.monospacedDigit())
-            Text("of \(plan.baseCurrency.formatted(minorUnits: item.plannedBaseMinor))")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-}
-
-private struct BudgetUsageStateLabel: View {
-    let state: BudgetUsageState
-
-    var body: some View {
-        Label(title, systemImage: systemImage)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(color)
-            .labelStyle(.titleAndIcon)
-    }
-
-    private var title: String {
-        switch state {
-        case .noTarget: "No target"
-        case .onTrack: "On track"
-        case .overspent: "Over plan"
-        case .refundCredit: "Refund credit"
-        }
-    }
-
-    private var systemImage: String {
-        switch state {
-        case .noTarget: "minus.circle"
-        case .onTrack: "checkmark.circle.fill"
-        case .overspent: "exclamationmark.circle.fill"
-        case .refundCredit: "arrow.uturn.backward.circle.fill"
-        }
-    }
-
-    private var color: Color {
-        switch state {
-        case .noTarget: .secondary
-        case .onTrack: .green
-        case .overspent: .red
-        case .refundCredit: .mint
-        }
-    }
-}
-
-private struct BudgetSummaryValue: View {
-    let title: String
-    let amount: Int64
-    let currency: BudgetCurrency
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Text(currency.formatted(minorUnits: amount))
-                .font(.subheadline.monospacedDigit().weight(.semibold))
-                .minimumScaleFactor(0.7)
-                .lineLimit(1)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            "\(L10n.categoryName(name: item.categoryName, predefinedKey: item.categoryPredefinedKey)), "
+            + "\(plan.baseCurrency.formatted(minorUnits: item.usedBaseMinor)) of "
+            + "\(plan.baseCurrency.formatted(minorUnits: item.plannedBaseMinor)) planned, "
+            + "\(plan.baseCurrency.formatted(minorUnits: item.remainingBaseMinor)) remaining"
+        )
     }
 }
 
@@ -383,7 +284,23 @@ private struct MonthlyBudgetEditorView: View {
                             Picker("Expense category", selection: $item.categoryID) {
                                 Text("Choose a category").tag("")
                                 ForEach(options(for: item)) { option in
-                                    Text(option.title).tag(option.id)
+                                    HStack(spacing: 6) {
+                                        CategoryNameLabel(
+                                            name: option.name,
+                                            kind: .expense,
+                                            predefinedKey: option.predefinedKey,
+                                            systemKey: nil,
+                                            iconType: option.iconType,
+                                            iconValue: option.iconValue,
+                                            colorKey: option.colorKey,
+                                            iconSize: 22
+                                        )
+                                        if option.isArchived {
+                                            Text(L10n.text("category.editor.archived"))
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+                                    .tag(option.id)
                                 }
                             }
                             TextField("Planned amount", text: $item.amount)
@@ -435,25 +352,39 @@ private struct MonthlyBudgetEditorView: View {
         var result = activeExpenseCategories.map {
             MonthlyBudgetCategoryOption(
                 id: $0.id,
-                title: ($0.icon.map { "\($0) " } ?? "") + $0.name
+                name: L10n.categoryName(
+                    name: $0.name,
+                    kind: $0.kind,
+                    predefinedKey: $0.predefinedKey,
+                    systemKey: $0.systemKey
+                ),
+                predefinedKey: $0.predefinedKey,
+                iconType: $0.iconType,
+                iconValue: $0.iconValue,
+                colorKey: $0.colorKey,
+                isArchived: false
             )
         }
         if let retained = plan?.items.first(where: { $0.categoryID == draft.categoryID }),
            !result.contains(where: { $0.id == retained.categoryID }) {
             result.append(MonthlyBudgetCategoryOption(
                 id: retained.categoryID,
-                title: (retained.categoryIcon.map { "\($0) " } ?? "")
-                    + retained.categoryName + " (archived)"
+                name: L10n.categoryName(name: retained.categoryName, predefinedKey: retained.categoryPredefinedKey),
+                predefinedKey: retained.categoryPredefinedKey,
+                iconType: retained.categoryIconType,
+                iconValue: retained.categoryIconValue,
+                colorKey: retained.categoryColorKey,
+                isArchived: true
             ))
         }
-        return result.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+        return result.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     private func save() {
         validationMessage = nil
         let normalizedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedName.isEmpty, normalizedName.count <= 100, !items.isEmpty else {
-            validationMessage = "Give the plan a name and add at least one expense category."
+            validationMessage = L10n.text("Give the plan a name and add at least one expense category.")
             return
         }
         var selected = Set<String>()
@@ -462,16 +393,16 @@ private struct MonthlyBudgetEditorView: View {
         for item in items {
             guard !item.categoryID.isEmpty,
                   let amount = Self.parseAmount(item.amount), amount > 0 else {
-                validationMessage = "Every item needs an expense category and a positive amount with at most two decimals."
+                validationMessage = L10n.text("Every item needs an expense category and a positive amount with at most two decimals.")
                 return
             }
             guard selected.insert(item.categoryID).inserted else {
-                validationMessage = "Each category can appear only once."
+                validationMessage = L10n.text("Each category can appear only once.")
                 return
             }
             let addition = total.addingReportingOverflow(amount)
             guard !addition.overflow else {
-                validationMessage = "The planned total is too large."
+                validationMessage = L10n.text("The planned total is too large.")
                 return
             }
             total = addition.partialValue
@@ -481,7 +412,7 @@ private struct MonthlyBudgetEditorView: View {
             ))
         }
         guard !hasBranchOverlap(selected) else {
-            validationMessage = "Choose a category or its subcategories, not both."
+            validationMessage = L10n.text("Choose a category or its subcategories, not both.")
             return
         }
         Task {
@@ -538,5 +469,10 @@ private struct MonthlyBudgetDraft: Identifiable {
 
 private struct MonthlyBudgetCategoryOption: Identifiable {
     let id: String
-    let title: String
+    let name: String
+    let predefinedKey: String?
+    let iconType: String
+    let iconValue: String
+    let colorKey: String
+    let isArchived: Bool
 }

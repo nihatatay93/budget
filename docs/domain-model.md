@@ -608,7 +608,10 @@ parent_id
 name
 kind
 system_key
-icon
+predefined_key
+icon_type
+icon_value
+color_key
 archived_at
 created_at
 updated_at
@@ -623,6 +626,23 @@ income
 
 `system_key` is null for ordinary categories. Protected categories use stable values such
 as `uncategorized_expense` and `uncategorized_income`, unique within a workspace.
+
+`predefined_key` is null for custom categories. Workspace-owned built-in categories use a
+stable semantic key such as `groceries` or `salary`, unique within a workspace, with a
+semantic default appearance. Clients resolve a built-in category's display name through their
+localization resources; its persisted `name` is a non-localized compatibility value and must
+not be shown in preference to the localized key. Their name, kind, and hierarchy remain
+stable, while a workspace may personalize their semantic icon and color. Custom category
+names remain user-entered and display exactly as stored. Built-ins are created idempotently at
+workspace registration and when an existing workspace's categories are first loaded.
+
+`icon_type` is either `system` or `emoji`. System `icon_value` values are stable semantic
+keys such as `home` and `shopping-cart`, never a web icon component or SF Symbol name;
+clients map them to their native presentation. Emoji values retain their Unicode sequence.
+`color_key` is a curated semantic palette key (`green`, `mint`, `blue`, `cyan`, `purple`,
+`pink`, `red`, `orange`, `amber`, or `slate`) rather than a CSS or Swift color. Predefined
+categories begin with canonical system-icon/color metadata. Existing and newly created custom
+categories default to `system` / `ellipsis` / `slate` unless an allowed appearance is chosen.
 
 Category `kind` classifies the category's reporting purpose; it does not constrain allocation
 sign. An expense category accepts negative purchases and positive refunds. An income
@@ -710,6 +730,16 @@ adjustment
 An uncategorized standard transaction is represented by a normal allocation to the
 workspace's protected Uncategorized expense or income category; it is not represented by
 an empty allocation set.
+
+A write may omit an allocation's amount when it carries exactly one allocation. The amount
+then takes the transaction's total entry base amount, which is the same figure the
+uncategorized default already uses — for a foreign-currency account, the value booked at the
+transaction date's rate. This exists so choosing a category never obliges a client to restate
+an amount the server is about to compute, and it does not weaken reconciliation: the derived
+amount is taken from the entry totals the rule compares against.
+
+A split must state every allocation amount. Dividing a transaction between categories is the
+client's decision and cannot be derived from the entries.
 
 The domain service validates these rules before persistence. PostgreSQL also enforces the
 cross-table invariant with deferred constraint triggers covering entries, allocations, and
@@ -943,6 +973,39 @@ their ancestors remain available when needed to explain historical or pending ac
 All figures in one projection response observe one consistent PostgreSQL snapshot and are
 scoped to one verified workspace membership. See
 [ADR 0007](decisions/0007-derive-financial-projections-from-the-ledger.md).
+
+## Spending Analysis
+
+Spending analysis is a separate derived read model over the same ledger. A projection states
+one period's position and keeps pending activity visible; an analysis describes settled
+behaviour over time, so it excludes pending activity entirely.
+
+Its window follows the same inclusive-date rules, defaulting to the trailing twelve
+workspace-local months anchored to a month boundary. Every analysis also resolves a
+comparison window of the same length ending the day before the analysis window, so
+period-over-period movement is like-for-like without a second request.
+
+Activity is bucketed by day, ISO week, or calendar month. Buckets tile the window: contiguous,
+non-overlapping, clamped to the window, and present even when empty.
+
+Values use the same reporting orientation as projections. Two readings need care beyond a
+sign flip:
+
+```text
+expense category  largest reading = most negative allocation (a refund is the other end)
+income category   largest reading = most positive allocation
+```
+
+A window whose only expense activity was a refund reports no largest charge rather than a
+negative one.
+
+Transfers are excluded everywhere. Allocation-derived figures exclude them by construction;
+the entry-derived per-account breakdown excludes `kind = 'transfer'` explicitly, so moving
+money between owned accounts never reads as spending.
+
+All parts of one analysis response observe one consistent PostgreSQL snapshot and are scoped
+to one verified workspace membership. See
+[ADR 0011](decisions/0011-analyze-posted-spending-over-time.md).
 
 ---
 
@@ -1283,7 +1346,8 @@ Implementation and tests must preserve these invariants:
 6. Credit-card payments are transfers, not expenses.
 7. Category/budget reporting uses allocations, not raw account entries.
 8. Standard transaction allocations must reconcile exactly with entry base amounts;
-   uncategorized standard transactions use protected Uncategorized allocations.
+   uncategorized standard transactions use protected Uncategorized allocations. A lone
+   allocation may omit its amount and take the entry total; a split may not.
 9. Transfers have no allocations and their entry base amounts sum to zero.
 10. Account currency cannot be casually changed after financial history exists.
 11. Archived accounts/categories remain usable for historical reporting.

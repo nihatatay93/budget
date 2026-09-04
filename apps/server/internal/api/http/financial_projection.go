@@ -84,7 +84,10 @@ func financialProjectionResponse(value reporting.Projection) (openapi.FinancialP
 		categories = append(categories, openapi.FinancialProjectionCategory{
 			Id: id, ParentId: parentID, Name: category.Name,
 			Kind: openapi.CategoryKind(category.Kind), SystemKey: systemKey,
-			Icon: category.Icon, ArchivedAt: category.ArchivedAt,
+			PredefinedKey: predefinedCategoryKey(category.PredefinedKey),
+			Icon:          category.Icon, IconType: openapi.CategoryIconType(category.IconType),
+			IconValue: category.IconValue, ColorKey: openapi.CategoryColorKey(category.ColorKey),
+			ArchivedAt:        category.ArchivedAt,
 			DirectBaseMinor:   projectionAmounts(category.Direct),
 			RolledUpBaseMinor: projectionAmounts(category.RolledUp),
 		})

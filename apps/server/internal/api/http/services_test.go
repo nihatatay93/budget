@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nihatatay93/budget/internal/exchange"
 )
@@ -21,6 +22,7 @@ func testServices() Services {
 		Transactions:   &fakeTransactionService{},
 		Budgets:        &fakeBudgetService{},
 		Reporting:      &fakeReportingService{},
+		Analysis:       &fakeAnalysisService{},
 		Collaboration:  &fakeCollaborationService{},
 	}
 }
@@ -30,6 +32,7 @@ func testOptions() Options {
 		PublicOrigin: "https://budget.example",
 		CookieSecure: true,
 		Logger:       slog.New(slog.NewTextHandler(io.Discard, nil)),
+		SessionTTL:   24 * time.Hour,
 	}
 }
 
@@ -58,7 +61,7 @@ func TestNewRouterReportsEveryMissingRequiredService(t *testing.T) {
 	}
 	for _, name := range []string{
 		"Authentication", "Accounts", "Categories", "Transactions",
-		"Budgets", "Reporting", "Collaboration",
+		"Budgets", "Reporting", "Analysis", "Collaboration",
 	} {
 		if !strings.Contains(err.Error(), name) {
 			t.Fatalf("NewRouter() error = %q, missing %s", err, name)

@@ -27,7 +27,7 @@ struct WorkspaceCollaborationView: View {
         List {
             Section("Workspace access") {
                 LabeledContent("Workspace", value: workspace.name)
-                LabeledContent("Your role", value: actorRole?.title ?? workspace.role.capitalized)
+                LabeledContent("Your role", value: actorRole?.title ?? L10n.workspaceRole(workspace.role))
                 LabeledContent("Members", value: "\(model.members.count)")
             }
 

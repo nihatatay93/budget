@@ -12,6 +12,7 @@ import {
 import { type SessionResponse, logout, sessionQueryKey } from "../api/client";
 import { AppIcon, AppStatus, BrandMark } from "../components/ExperiencePrimitives";
 import { PageHeader, StatusBadge } from "../components/Presentation";
+import { roleLabel, t } from "../lib/i18n";
 import {
   type WorkspaceDestination,
   WorkspaceSetupPage,
@@ -26,6 +27,7 @@ const primaryNavigation: NavigationItem[] = [
   { destination: "overview", icon: "home", label: "Overview" },
   { destination: "transactions", icon: "transactions", label: "Transactions" },
   { destination: "budget", icon: "budget", label: "Budget" },
+  { destination: "analysis", icon: "analysis", label: "Analysis" },
   { destination: "reports", icon: "chart", label: "Reports" },
 ];
 
@@ -57,8 +59,13 @@ const pageCopy: Record<WorkspaceDestination, { eyebrow: string; title: string; d
     title: "Budget",
     description: "Set category targets and compare them with posted spending.",
   },
-  reports: {
+  analysis: {
     eyebrow: "Understand the pattern",
+    title: "Analysis",
+    description: "See where your money went, when it went, and how the trend is moving.",
+  },
+  reports: {
+    eyebrow: "One period in detail",
     title: "Reports",
     description: "Explore balances, income, spending, and categories for a selected period.",
   },
@@ -107,12 +114,12 @@ export function DashboardPage({ session }: { session: SessionResponse }) {
       <AppStatus
         action={(
           <button disabled={logoutMutation.isPending} onClick={() => logoutMutation.mutate()} type="button">
-            Sign out
+            {t("Sign out")}
           </button>
         )}
-        description="This session does not currently belong to a workspace. Ask a workspace owner for an invitation."
-        eyebrow="Workspace required"
-        title="No workspace available"
+        description={t("This session does not currently belong to a workspace. Ask a workspace owner for an invitation.")}
+        eyebrow={t("Workspace required")}
+        title={t("No workspace available")}
         tone="empty"
       />
     );
@@ -128,8 +135,8 @@ export function DashboardPage({ session }: { session: SessionResponse }) {
 
   return (
     <div className="workspace-app">
-      <a className="skip-link" href="#workspace-content">Skip to content</a>
-      <aside className="app-sidebar" aria-label="Workspace navigation">
+      <a className="skip-link" href="#workspace-content">{t("Skip to content")}</a>
+      <aside className="app-sidebar" aria-label={t("Workspace navigation")}>
         <div className="sidebar-brand"><BrandMark withName /></div>
         <WorkspacePicker
           className="sidebar-workspace-picker"
@@ -138,7 +145,7 @@ export function DashboardPage({ session }: { session: SessionResponse }) {
           workspace={workspace}
         />
         <WorkspaceNavigation items={primaryNavigation} workspace={workspace} />
-        <WorkspaceNavigation label="Manage" items={managementNavigation} workspace={workspace} />
+        <WorkspaceNavigation label={t("Manage")} items={managementNavigation} workspace={workspace} />
         <div className="sidebar-account">
           <div className="user-avatar" aria-hidden="true">{initials(session.user.display_name)}</div>
           <div>
@@ -151,7 +158,7 @@ export function DashboardPage({ session }: { session: SessionResponse }) {
             onClick={() => logoutMutation.mutate()}
             type="button"
           >
-            Sign out
+            {t("Sign out")}
           </button>
         </div>
       </aside>
@@ -168,10 +175,10 @@ export function DashboardPage({ session }: { session: SessionResponse }) {
         </header>
         <main className="workspace-content" id="workspace-content" tabIndex={-1}>
           <PageHeader
-            description={pageCopy[destination].description}
-            eyebrow={pageCopy[destination].eyebrow}
-            meta={<StatusBadge tone="positive">{workspace.role}</StatusBadge>}
-            title={pageCopy[destination].title}
+            description={t(pageCopy[destination].description)}
+            eyebrow={t(pageCopy[destination].eyebrow)}
+            meta={<StatusBadge tone="positive">{roleLabel(workspace.role)}</StatusBadge>}
+            title={t(pageCopy[destination].title)}
           />
           <Routes>
             <Route index element={<Navigate replace to="overview" />} />
@@ -192,7 +199,7 @@ export function DashboardPage({ session }: { session: SessionResponse }) {
             <Route path="*" element={<Navigate replace to="overview" />} />
           </Routes>
         </main>
-        <nav className="bottom-navigation" aria-label="Primary navigation">
+        <nav className="bottom-navigation" aria-label={t("Primary navigation")}>
           {compactNavigation.map((item) => (
             <WorkspaceNavLink item={item} key={item.destination} workspace={workspace} />
           ))}
@@ -215,9 +222,9 @@ function WorkspacePicker({
 }) {
   return (
     <label className={className}>
-      <span>Workspace</span>
+      <span>{t("Workspace")}</span>
       <select
-        aria-label="Current workspace"
+        aria-label={t("Current workspace")}
         onChange={(event) => onChange(event.target.value)}
         value={workspace.id}
       >
@@ -225,7 +232,7 @@ function WorkspacePicker({
           <option key={candidate.id} value={candidate.id}>{candidate.name}</option>
         ))}
       </select>
-      <small>{workspace.base_currency} · {workspace.role}</small>
+      <small>{workspace.base_currency} · {roleLabel(workspace.role)}</small>
     </label>
   );
 }
@@ -240,7 +247,7 @@ function WorkspaceNavigation({
   workspace: Workspace;
 }) {
   return (
-    <nav className="sidebar-navigation" aria-label={label ?? "Primary"}>
+    <nav className="sidebar-navigation" aria-label={label ?? t("Workspace navigation")}>
       {label ? <span className="sidebar-navigation-label">{label}</span> : null}
       {items.map((item) => (
         <WorkspaceNavLink item={item} key={item.destination} workspace={workspace} />
@@ -254,7 +261,7 @@ function WorkspaceNavLink({ item, workspace }: { item: NavigationItem; workspace
   const destination = destinationFromPath(location.pathname);
   const isActive = destination === item.destination;
   const groupedUnderMore = item.destination === "more"
-    && (["more", "reports", "categories", "people"] as WorkspaceDestination[]).includes(destination);
+    && (["more", "analysis", "reports", "categories", "people"] as WorkspaceDestination[]).includes(destination);
   return (
     <Link
       aria-current={isActive || groupedUnderMore ? "page" : undefined}
@@ -262,7 +269,7 @@ function WorkspaceNavLink({ item, workspace }: { item: NavigationItem; workspace
       to={workspacePath(workspace.id, item.destination)}
     >
       <AppIcon name={item.icon} />
-      <span>{item.label}</span>
+      <span>{t(item.label)}</span>
     </Link>
   );
 }

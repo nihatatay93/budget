@@ -8,6 +8,7 @@ import {
 } from "../../api/client";
 import { MutationError } from "../../components/MutationError";
 import { InlineNotice } from "../../components/Presentation";
+import { roleLabel, t } from "../../lib/i18n";
 
 const TOKEN_LENGTH = 43;
 
@@ -41,19 +42,19 @@ export function AcceptInvitationPanel() {
     <section className="people-panel join-workspace-panel" aria-labelledby="accept-invitation-heading">
       <div className="people-panel-heading">
         <div>
-          <p className="eyebrow">Joining a shared workspace</p>
-          <h2 id="accept-invitation-heading">Accept an invitation</h2>
-          <p>Paste the one-time code you received. It is sent only in the request body.</p>
+          <p className="eyebrow">{t("Joining a shared workspace")}</p>
+          <h2 id="accept-invitation-heading">{t("Accept an invitation")}</h2>
+          <p>{t("Paste the one-time code you received. It is sent only in the request body.")}</p>
         </div>
       </div>
       {accepted ? (
-        <InlineNotice title="Workspace joined" tone="positive">
-          <p>You joined <strong>{accepted.workspace.name}</strong> as {accepted.member.role}.</p>
+        <InlineNotice title={t("Workspace joined")} tone="positive">
+          <p>{t("You joined {workspace} as {role}.", { workspace: accepted.workspace.name, role: roleLabel(accepted.member.role) })}</p>
         </InlineNotice>
       ) : null}
       <form className="accept-invitation-form" onSubmit={submit}>
         <label>
-          Invitation code
+          {t("Invitation code")}
           <input
             required
             value={token}
@@ -67,7 +68,7 @@ export function AcceptInvitationPanel() {
         <MutationError mutation={accept} />
         <div className="form-actions">
           <button disabled={accept.isPending || token.trim().length !== TOKEN_LENGTH} type="submit">
-            Join workspace
+            {t("Join workspace")}
           </button>
         </div>
       </form>

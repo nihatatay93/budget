@@ -10,13 +10,16 @@ struct WorkspaceTabTests {
             .accounts,
             .more,
         ])
-        #expect(WorkspaceTab.allCases.map(\.title) == [
-            "Overview",
-            "Transactions",
-            "Budget",
-            "Accounts",
-            "More",
+        // Identity, not display text: `title` is localized now, so asserting English copy would
+        // only record which language the test host happens to run in.
+        #expect(WorkspaceTab.allCases.map(\.rawValue) == [
+            "overview",
+            "transactions",
+            "budget",
+            "accounts",
+            "more",
         ])
+        #expect(WorkspaceTab.allCases.allSatisfy { !$0.title.isEmpty })
     }
 
     @Test func givesEveryDestinationDistinctSelectedAndUnselectedSymbols() {

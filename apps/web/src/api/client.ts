@@ -1,4 +1,5 @@
 import type { components } from "./generated/schema";
+import { currentLocale, t } from "../lib/i18n";
 
 export type SessionResponse = components["schemas"]["SessionResponse"];
 export type AuthResponse = components["schemas"]["AuthResponse"];
@@ -6,14 +7,50 @@ export type LoginRequest = components["schemas"]["LoginRequest"];
 export type RegisterRequest = components["schemas"]["RegisterRequest"];
 export type Account = components["schemas"]["Account"];
 export type AccountWriteRequest = components["schemas"]["AccountWriteRequest"];
-export type Category = components["schemas"]["Category"];
+type CategoryResponse = components["schemas"]["Category"];
+export type Category = Omit<CategoryResponse, "color_key" | "icon_type" | "icon_value"> &
+  Partial<Pick<CategoryResponse, "color_key" | "icon_type" | "icon_value">>;
 export type CategoryWriteRequest = components["schemas"]["CategoryWriteRequest"];
 export type Transaction = components["schemas"]["Transaction"];
 export type TransactionWriteRequest = components["schemas"]["TransactionWriteRequest"];
-export type FinancialProjection = components["schemas"]["FinancialProjection"];
-export type MonthlyBudget = components["schemas"]["MonthlyBudget"];
+type FinancialProjectionCategory = components["schemas"]["FinancialProjectionCategory"];
+type MonthlyBudgetItem = components["schemas"]["MonthlyBudgetItem"];
+export type FinancialProjection = Omit<components["schemas"]["FinancialProjection"], "categories"> & {
+  categories: Array<
+    Omit<FinancialProjectionCategory, "color_key" | "icon_type" | "icon_value"> &
+    Partial<Pick<FinancialProjectionCategory, "color_key" | "icon_type" | "icon_value">>
+  >;
+};
+export type MonthlyBudget = Omit<components["schemas"]["MonthlyBudget"], "items"> & {
+  items: Array<
+    Omit<MonthlyBudgetItem, "category_color_key" | "category_icon_type" | "category_icon_value"> &
+    Partial<Pick<MonthlyBudgetItem, "category_color_key" | "category_icon_type" | "category_icon_value">>
+  >;
+};
 export type MonthlyBudgetWriteRequest = components["schemas"]["MonthlyBudgetWriteRequest"];
 export type FinancialProjectionRange = { fromDate: string; toDate: string };
+export type AnalysisGranularity = components["schemas"]["AnalysisGranularity"];
+type SpendingAnalysisCategory = components["schemas"]["SpendingAnalysisCategory"];
+/**
+ * Category appearance fields are optional on the client for the same reason as elsewhere: a
+ * server predating the appearance contract still answers, and the UI falls back rather than
+ * rendering an undefined icon.
+ */
+export type SpendingAnalysis = Omit<components["schemas"]["SpendingAnalysis"], "categories"> & {
+  categories: Array<
+    Omit<SpendingAnalysisCategory, "color_key" | "icon_type" | "icon_value"> &
+    Partial<Pick<SpendingAnalysisCategory, "color_key" | "icon_type" | "icon_value">>
+  >;
+};
+export type SpendingAnalysisBucket = components["schemas"]["SpendingAnalysisBucket"];
+export type SpendingAnalysisDay = components["schemas"]["SpendingAnalysisDay"];
+export type SpendingAnalysisPayee = components["schemas"]["SpendingAnalysisPayee"];
+export type SpendingAnalysisWeekday = components["schemas"]["SpendingAnalysisWeekday"];
+export type SpendingAnalysisRange = {
+  fromDate: string;
+  toDate: string;
+  granularity?: AnalysisGranularity;
+};
 export const sessionQueryKey = ["session"] as const;
 export const accountsQueryKey = (workspaceId: string) => ["workspaces", workspaceId, "accounts"] as const;
 export const categoriesQueryKey = (workspaceId: string) =>
@@ -26,6 +63,12 @@ export const financialProjectionQueryKey = (
   workspaceId: string,
   range?: FinancialProjectionRange,
 ) => [...financialProjectionQueryPrefix(workspaceId), range ?? "month-to-date"] as const;
+export const spendingAnalysisQueryPrefix = (workspaceId: string) =>
+  ["workspaces", workspaceId, "spending-analysis"] as const;
+export const spendingAnalysisQueryKey = (
+  workspaceId: string,
+  range?: SpendingAnalysisRange,
+) => [...spendingAnalysisQueryPrefix(workspaceId), range ?? "trailing-year"] as const;
 export const monthlyBudgetQueryPrefix = (workspaceId: string) =>
   ["workspaces", workspaceId, "budgets"] as const;
 export const monthlyBudgetQueryKey = (workspaceId: string, month: string) =>
@@ -51,10 +94,12 @@ export async function requestJSON<T>(path: string, init?: RequestInit): Promise<
     },
   });
   if (!response.ok) {
-    let message = "The request could not be completed.";
+    let message = t("The request could not be completed.");
     try {
       const body = (await response.json()) as components["schemas"]["ErrorResponse"];
-      message = body.error.message;
+      // The API currently returns English prose. Preserve it for the default locale, but
+      // avoid leaking a mixed-language server message into the Turkish interface.
+      if (currentLocale() === "en") message = body.error.message;
     } catch {
       // Keep the generic message when an intermediary returns a non-JSON error.
     }
@@ -218,6 +263,22 @@ export function getFinancialProjection(
     : "";
   return requestJSON<FinancialProjection>(
     `/v1/workspaces/${encodeURIComponent(workspaceId)}/financial-projection${query}`,
+  );
+}
+
+export function getSpendingAnalysis(
+  workspaceId: string,
+  range?: SpendingAnalysisRange,
+): Promise<SpendingAnalysis> {
+  const parameters = new URLSearchParams();
+  if (range) {
+    parameters.set("from_date", range.fromDate);
+    parameters.set("to_date", range.toDate);
+  }
+  if (range?.granularity) parameters.set("granularity", range.granularity);
+  const query = parameters.size > 0 ? `?${parameters}` : "";
+  return requestJSON<SpendingAnalysis>(
+    `/v1/workspaces/${encodeURIComponent(workspaceId)}/spending-analysis${query}`,
   );
 }
 

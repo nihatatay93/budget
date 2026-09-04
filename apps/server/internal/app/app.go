@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/nihatatay93/budget/internal/account"
+	"github.com/nihatatay93/budget/internal/analysis"
 	httpapi "github.com/nihatatay93/budget/internal/api/http"
 	"github.com/nihatatay93/budget/internal/auth"
 	"github.com/nihatatay93/budget/internal/budget"
@@ -110,6 +111,9 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger) (*App, err
 	reports := reporting.NewService(
 		postgresplatform.NewReportingRepository(store.Pool()), access, time.Now,
 	)
+	analytics := analysis.NewService(
+		postgresplatform.NewAnalysisRepository(store.Pool()), access, time.Now,
+	)
 	budgets := budget.NewService(
 		postgresplatform.NewBudgetRepository(store.Pool()), access, time.Now,
 	)
@@ -129,6 +133,7 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger) (*App, err
 		Transactions:   transactions,
 		Budgets:        budgets,
 		Reporting:      reports,
+		Analysis:       analytics,
 		Collaboration:  collaboration,
 	}
 	// Left nil when the operator has not enabled rate fetching, which the rates endpoint
@@ -145,7 +150,8 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger) (*App, err
 		AuthRateBurst:  cfg.AuthRateBurst,
 		// The cookie is marked Secure exactly when the deployment terminates TLS, which is
 		// also when pinning the browser to HTTPS is correct.
-		HSTS: cfg.CookieSecure,
+		HSTS:       cfg.CookieSecure,
+		SessionTTL: cfg.SessionTTL,
 	})
 	if err != nil {
 		store.Close()

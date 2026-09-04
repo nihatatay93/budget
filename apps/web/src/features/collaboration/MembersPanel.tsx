@@ -21,6 +21,7 @@ import {
   type ToastMessage,
 } from "../../components/Presentation";
 import { assignableRoles, canRemoveMember } from "../../lib/workspace";
+import { roleLabel, t } from "../../lib/i18n";
 
 type Workspace = SessionResponse["workspaces"][number];
 
@@ -52,8 +53,8 @@ export function MembersPanel({
     onSuccess: async (member) => {
       setToasts([{
         id: `member-role-${member.user_id}-${member.role}`,
-        title: "Member role updated",
-        description: `${member.display_name} is now ${member.role}.`,
+        title: t("Member role updated"),
+        description: t("{name} is now {role}.", { name: member.display_name, role: roleLabel(member.role) }),
         tone: "positive",
       }]);
       await refresh();
@@ -65,7 +66,7 @@ export function MembersPanel({
       const isSelf = removing?.user_id === currentUserId;
       setToasts([{
         id: `member-remove-${removing?.user_id ?? "complete"}`,
-        title: isSelf ? "You left the workspace" : "Member removed",
+        title: isSelf ? t("You left the workspace") : t("Member removed"),
         tone: "positive",
       }]);
       setRemoving(undefined);
@@ -82,23 +83,23 @@ export function MembersPanel({
     <section className="people-panel members-panel" aria-labelledby="members-heading">
       <div className="people-panel-heading">
         <div>
-          <p className="eyebrow">Who can see this workspace</p>
-          <h2 id="members-heading">Members</h2>
+          <p className="eyebrow">{t("Who can see this workspace")}</p>
+          <h2 id="members-heading">{t("Members")}</h2>
         </div>
-        <StatusBadge>{query.data?.length ?? 0} active</StatusBadge>
+        <StatusBadge>{t("{count} active", { count: query.data?.length ?? 0 })}</StatusBadge>
       </div>
-      {query.isPending ? <LoadingState label="Loading workspace members" rows={4} /> : null}
+      {query.isPending ? <LoadingState label={t("Loading workspace members")} rows={4} /> : null}
       {query.isError ? (
         <InlineNotice
-          action={<button className="secondary-button" onClick={() => void query.refetch()} type="button">Try again</button>}
-          title="Members could not be loaded"
+          action={<button className="secondary-button" onClick={() => void query.refetch()} type="button">{t("Try again")}</button>}
+          title={t("Members could not be loaded")}
           tone="danger"
         >
           <p>{query.error.message}</p>
         </InlineNotice>
       ) : null}
       {!query.isPending && !query.isError && query.data?.length === 0 ? (
-        <EmptyState compact description="Invite someone when you are ready to share this workspace." icon="people" title="No members yet" />
+        <EmptyState compact description={t("Invite someone when you are ready to share this workspace.")} icon="people" title={t("No members yet")} />
       ) : null}
       <div className="member-list">
         {query.data?.map((member) => {
@@ -109,16 +110,16 @@ export function MembersPanel({
             <article className="member-row" key={member.user_id}>
               <div aria-hidden="true" className="member-avatar">{initials(member.display_name)}</div>
               <div className="member-identity">
-                <strong>{member.display_name}{isSelf ? " (you)" : ""}</strong>
+                <strong>{member.display_name}{isSelf ? ` ${t("(you)")}` : ""}</strong>
                 <small>
                   <span>{member.email}</span>
-                  <span>Joined {new Date(member.joined_at).toLocaleDateString()}</span>
+                  <span>{t("Joined {date}", { date: new Date(member.joined_at).toLocaleDateString() })}</span>
                 </small>
               </div>
               <div className="member-controls">
                 {roles.length > 0 ? (
                   <label className="inline-field">
-                    <span className="visually-hidden">Role for {member.display_name}</span>
+                    <span className="visually-hidden">{t("Role for {name}", { name: member.display_name })}</span>
                     <select
                       value={member.role}
                       disabled={changeRole.isPending}
@@ -127,13 +128,13 @@ export function MembersPanel({
                         role: event.target.value as WorkspaceMember["role"],
                       })}
                     >
-                      {roles.map((role) => <option key={role} value={role}>{role}</option>)}
+                      {roles.map((role) => <option key={role} value={role}>{roleLabel(role)}</option>)}
                     </select>
                   </label>
-                ) : <StatusBadge tone={member.role === "owner" ? "positive" : "neutral"}>{member.role}</StatusBadge>}
+                ) : <StatusBadge tone={member.role === "owner" ? "positive" : "neutral"}>{roleLabel(member.role)}</StatusBadge>}
                 {removable ? (
                   <button className="text-button danger" onClick={() => confirmRemoval(member)} type="button">
-                    {isSelf ? "Leave" : "Remove"}
+                    {isSelf ? t("Leave") : t("Remove")}
                   </button>
                 ) : null}
               </div>
@@ -144,27 +145,27 @@ export function MembersPanel({
       <MutationError mutation={changeRole} />
       <ModalDialog
         description={removing?.user_id === currentUserId
-          ? `You will lose access to ${workspace.name} and its financial data.`
-          : `${removing?.display_name ?? "This member"} will immediately lose access to this workspace.`}
+          ? t("You will lose access to {workspace} and its financial data.", { workspace: workspace.name })
+          : t("{member} will immediately lose access to this workspace.", { member: removing?.display_name ?? t("This member") })}
         footer={(
           <>
-            <button className="secondary-button" onClick={() => setRemoving(undefined)} type="button">Cancel</button>
+            <button className="secondary-button" onClick={() => setRemoving(undefined)} type="button">{t("Cancel")}</button>
             <button
               className="danger-button"
               disabled={remove.isPending}
               onClick={() => removing && remove.mutate(removing.user_id)}
               type="button"
             >
-              {remove.isPending ? "Updating…" : removing?.user_id === currentUserId ? "Leave workspace" : "Remove member"}
+              {remove.isPending ? t("Updating…") : removing?.user_id === currentUserId ? t("Leave workspace") : t("Remove member")}
             </button>
           </>
         )}
         onClose={() => setRemoving(undefined)}
         open={Boolean(removing)}
-        title={removing?.user_id === currentUserId ? `Leave ${workspace.name}?` : `Remove ${removing?.display_name ?? "member"}?`}
+        title={removing?.user_id === currentUserId ? t("Leave {workspace}?", { workspace: workspace.name }) : t("Remove {member}?", { member: removing?.display_name ?? t("member") })}
       >
-        <InlineNotice title="Access changes immediately" tone="warning">
-          <p>Existing financial records and audit attribution are preserved.</p>
+        <InlineNotice title={t("Access changes immediately")} tone="warning">
+          <p>{t("Existing financial records and audit attribution are preserved.")}</p>
         </InlineNotice>
         <MutationError mutation={remove} />
       </ModalDialog>

@@ -108,7 +108,9 @@ func (r *ReportingRepository) Load(
 		categories = append(categories, reporting.CategorySnapshot{
 			ID: id, ParentID: uuidStringPointer(row.ParentID), Name: row.Name,
 			Kind: reporting.CategoryKind(row.Kind), SystemKey: stringPointer(row.SystemKey),
-			Icon: stringPointer(row.Icon), ArchivedAt: timePointer(row.ArchivedAt),
+			PredefinedKey: stringPointer(row.PredefinedKey),
+			Icon:          stringPointer(row.Icon), IconType: row.IconType, IconValue: row.IconValue,
+			ColorKey: row.ColorKey, ArchivedAt: timePointer(row.ArchivedAt),
 			DirectPostedSignedMinor:  row.DirectPostedSignedMinor,
 			DirectPendingSignedMinor: row.DirectPendingSignedMinor,
 			RolledPostedSignedMinor:  row.RolledPostedSignedMinor,

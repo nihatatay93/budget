@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Category } from "../../api/client";
@@ -56,17 +56,28 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+/**
+ * Categories are presented as tiles now, and a tile reveals its own row of actions when chosen,
+ * so a test reaches Edit or Archive by picking the category first.
+ */
+async function openCategory(name: string) {
+  fireEvent.click(await screen.findByRole("button", { name }));
+  return document.querySelector(".category-hierarchy-row") as HTMLElement;
+}
+
 describe("CategoriesPanel presentation", () => {
   it("separates kinds, preserves hierarchy, and identifies protected and archived rows", async () => {
     installFetch();
     const { container } = renderPanel(true);
 
     const expense = await screen.findByRole("region", { name: "Expense" });
-    expect(within(expense).getByText("Food")).toBeInTheDocument();
-    expect(within(expense).getByText("Restaurants")).toBeInTheDocument();
-    const protectedRow = within(expense).getByText("Uncategorized").closest("article");
-    expect(within(protectedRow!).getByText("Protected")).toBeInTheDocument();
-    expect(within(protectedRow!).queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+    // Food heads its own section and is also the first tile inside it, because a parent is a
+    // category in its own right.
+    expect(within(expense).getByRole("heading", { name: "Food" })).toBeInTheDocument();
+    expect(within(expense).getByRole("button", { name: "Restaurants" })).toBeInTheDocument();
+    const protectedRow = await openCategory("Uncategorized Expense");
+    expect(within(protectedRow).getByText("Protected")).toBeInTheDocument();
+    expect(within(protectedRow).queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Income" })).toHaveTextContent("Salary");
     expect(screen.getByText("1 archived category")).toBeInTheDocument();
     expect(screen.getByText("Old travel")).toBeInTheDocument();
@@ -77,8 +88,8 @@ describe("CategoriesPanel presentation", () => {
   it("does not offer descendants as parents while editing a hierarchy", async () => {
     installFetch();
     renderPanel(true);
-    const food = (await screen.findByText("Food")).closest("article");
-    fireEvent.click(within(food!).getByRole("button", { name: "Edit" }));
+    const food = await openCategory("Food");
+    fireEvent.click(within(food).getByRole("button", { name: "Edit" }));
 
     const parent = screen.getByLabelText("Parent (optional)");
     expect(screen.getByRole("dialog", { name: "Edit Food" })).toBeInTheDocument();
@@ -90,8 +101,8 @@ describe("CategoriesPanel presentation", () => {
   it("confirms archival and surfaces the active-child protection", async () => {
     installFetch({ archiveConflict: true });
     renderPanel(true);
-    const food = (await screen.findByText("Food")).closest("article");
-    fireEvent.click(within(food!).getByRole("button", { name: "Archive" }));
+    const food = await openCategory("Food");
+    fireEvent.click(within(food).getByRole("button", { name: "Archive" }));
 
     const dialog = screen.getByRole("dialog", { name: "Archive Food?" });
     expect(dialog).toHaveTextContent("active children cannot be archived");
@@ -103,7 +114,8 @@ describe("CategoriesPanel presentation", () => {
     installFetch();
     renderPanel(false);
 
-    expect(await screen.findByText("Food")).toBeInTheDocument();
+    // Food names its section and its own tile, so the heading is the unambiguous one.
+    expect(await screen.findByRole("heading", { name: "Food" })).toBeInTheDocument();
     expect(screen.getByText(/Viewer access can review the reporting hierarchy/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add category" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
@@ -117,6 +129,49 @@ describe("CategoriesPanel presentation", () => {
     expect(await screen.findByText("No active categories")).toBeInTheDocument();
     expect(screen.getByText(/Protected Uncategorized categories are normally created/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Create category" })).toBeInTheDocument();
+  });
+
+  it("creates a category with the selected emoji and semantic color key", async () => {
+    const fetchMock = installFetch();
+    renderPanel(true);
+    fireEvent.click(await screen.findByRole("button", { name: "Add category" }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Side project" } });
+    fireEvent.click(screen.getByRole("button", { name: "Emoji" }));
+    fireEvent.click(screen.getByRole("button", { name: "Use 👩🏽‍💻 as the category icon" }));
+    fireEvent.click(screen.getByRole("button", { name: "Purple color" }));
+    await expectNoAccessibilityViolations(screen.getByRole("dialog"));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Add category" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/categories$/),
+      expect.objectContaining({ method: "POST" }),
+    ));
+    const request = fetchMock.mock.calls.find(([, init]) => init?.method === "POST");
+    if (!request) throw new Error("The create request was not made.");
+    expect(JSON.parse(String(request[1]?.body))).toMatchObject({
+      name: "Side project", kind: "expense", icon_type: "emoji", icon_value: "👩🏽‍💻", color_key: "purple",
+    });
+  });
+
+  it("updates an existing category with the selected semantic appearance", async () => {
+    const fetchMock = installFetch();
+    renderPanel(true);
+    const food = await openCategory("Food");
+    fireEvent.click(within(food).getByRole("button", { name: "Edit" }));
+    fireEvent.click(screen.getByRole("button", { name: "System icon" }));
+    fireEvent.click(screen.getByRole("button", { name: "Home" }));
+    fireEvent.click(screen.getByRole("button", { name: "Green color" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Save category" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/categories\/food$/),
+      expect.objectContaining({ method: "PUT" }),
+    ));
+    const request = fetchMock.mock.calls.find(([, init]) => init?.method === "PUT");
+    if (!request) throw new Error("The update request was not made.");
+    expect(JSON.parse(String(request[1]?.body))).toMatchObject({
+      name: "Food", kind: "expense", icon_type: "system", icon_value: "home", color_key: "green",
+    });
   });
 });
 

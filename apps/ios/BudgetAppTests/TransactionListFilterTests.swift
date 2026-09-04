@@ -53,6 +53,33 @@ struct TransactionListFilterTests {
         ))
     }
 
+    /// Turkish lowercases "I" to dotless "ı", so locale-sensitive folding breaks Latin search
+    /// terms for exactly the people the Turkish translation is for.
+    /// Dotless "ı" is a separate Turkish letter rather than a stripped "i", so it is correctly
+    /// left out here: folding it into "i" would make "kısa" match "kisa".
+    @Test(arguments: ["ISTANBUL", "istanbul", "İSTANBUL", "Istanbul"])
+    func searchFoldsCaseWithoutApplyingTurkishDottedI(query: String) {
+        let transaction = BudgetTransaction(
+            id: "transaction-2",
+            workspaceID: "workspace-1",
+            kind: .standard,
+            status: .posted,
+            transactionDate: "2026-08-23",
+            payee: "İstanbul Kitapçısı",
+            description: nil,
+            notes: nil,
+            source: "manual",
+            entries: [],
+            allocations: []
+        )
+
+        #expect(TransactionListFilter(searchText: query).matches(
+            transaction,
+            accountNames: [:],
+            categoryNames: [:]
+        ))
+    }
+
     @Test func reportsWhetherTheUserHasNarrowedTheRegister() {
         #expect(!TransactionListFilter(searchText: "   ").isActive)
         #expect(TransactionListFilter(status: .pending).isActive)

@@ -40,7 +40,7 @@ func (r *CategoryRepository) List(
 	for _, row := range rows {
 		value, err := categoryFromDatabase(
 			row.ID, row.WorkspaceID, row.ParentID, row.Name, row.Kind,
-			row.SystemKey, row.Icon, row.ArchivedAt,
+			row.SystemKey, row.PredefinedKey, row.Icon, row.IconType, row.IconValue, row.ColorKey, row.ArchivedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -69,8 +69,30 @@ func (r *CategoryRepository) Get(
 	}
 	return categoryFromDatabase(
 		row.ID, row.WorkspaceID, row.ParentID, row.Name, row.Kind,
-		row.SystemKey, row.Icon, row.ArchivedAt,
+		row.SystemKey, row.PredefinedKey, row.Icon, row.IconType, row.IconValue, row.ColorKey, row.ArchivedAt,
 	)
+}
+
+func (r *CategoryRepository) EnsurePredefined(ctx context.Context, workspaceID string) error {
+	workspaceUUID, err := postgresUUID(workspaceID)
+	if err != nil {
+		return err
+	}
+	queries := sqlc.New(r.pool)
+	for _, value := range category.PredefinedCategories() {
+		if err := queries.CreatePredefinedCategory(ctx, sqlc.CreatePredefinedCategoryParams{
+			WorkspaceID: workspaceUUID, Name: value.Key, Kind: string(value.Kind),
+			PredefinedKey: pgtype.Text{String: value.Key, Valid: true},
+			ParentKey:     pgtype.Text{String: value.ParentKey, Valid: value.ParentKey != ""},
+			Icon:          pgtype.Text{String: value.Appearance.IconValue, Valid: true},
+			IconType:      string(value.Appearance.IconType),
+			IconValue:     value.Appearance.IconValue,
+			ColorKey:      value.Appearance.ColorKey,
+		}); err != nil {
+			return fmt.Errorf("create predefined category %s: %w", value.Key, err)
+		}
+	}
+	return nil
 }
 
 func (r *CategoryRepository) Create(ctx context.Context, value category.Category) (category.Category, error) {
@@ -81,6 +103,8 @@ func (r *CategoryRepository) Create(ctx context.Context, value category.Category
 	if err := sqlc.New(r.pool).CreateCategory(ctx, sqlc.CreateCategoryParams{
 		ID: categoryUUID, WorkspaceID: workspaceUUID, ParentID: postgresUUIDPointer(value.ParentID),
 		Name: value.Name, Kind: string(value.Kind), Icon: postgresText(value.Icon),
+		IconType: string(value.Appearance.IconType), IconValue: value.Appearance.IconValue,
+		ColorKey: value.Appearance.ColorKey,
 	}); err != nil {
 		return category.Category{}, mapCategoryError("create category", err)
 	}
@@ -98,7 +122,9 @@ func (r *CategoryRepository) Update(
 	}
 	rows, err := sqlc.New(r.pool).UpdateCategory(ctx, sqlc.UpdateCategoryParams{
 		ParentID: postgresUUIDPointer(input.ParentID), Name: input.Name, Kind: string(input.Kind),
-		Icon: postgresText(input.Icon), WorkspaceID: workspaceUUID, ID: categoryUUID,
+		Icon: postgresText(input.Icon), IconType: string(input.Appearance.IconType),
+		IconValue: input.Appearance.IconValue, ColorKey: input.Appearance.ColorKey,
+		WorkspaceID: workspaceUUID, ID: categoryUUID,
 	})
 	if err != nil {
 		return category.Category{}, mapCategoryError("update category", err)
@@ -171,7 +197,8 @@ func (r *CategoryRepository) HasAllocations(ctx context.Context, workspaceID, ca
 func categoryFromDatabase(
 	id, workspaceID, parentID pgtype.UUID,
 	name, kind string,
-	systemKey, icon pgtype.Text,
+	systemKey, predefinedKey, icon pgtype.Text,
+	iconType, iconValue, colorKey string,
 	archived pgtype.Timestamptz,
 ) (category.Category, error) {
 	idString, err := stringUUID(id)
@@ -185,7 +212,9 @@ func categoryFromDatabase(
 	return category.Category{
 		ID: idString, WorkspaceID: workspaceIDString, ParentID: uuidStringPointer(parentID),
 		Name: name, Kind: category.Kind(kind), SystemKey: stringPointer(systemKey),
-		Icon: stringPointer(icon), ArchivedAt: timePointer(archived),
+		PredefinedKey: stringPointer(predefinedKey),
+		Appearance:    category.Appearance{IconType: category.IconType(iconType), IconValue: iconValue, ColorKey: colorKey},
+		Icon:          stringPointer(icon), ArchivedAt: timePointer(archived),
 	}, nil
 }
 

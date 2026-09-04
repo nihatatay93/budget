@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/nihatatay93/budget/internal/account"
+	"github.com/nihatatay93/budget/internal/analysis"
 	openapi "github.com/nihatatay93/budget/internal/api/openapi"
 	"github.com/nihatatay93/budget/internal/category"
 	"github.com/nihatatay93/budget/internal/money"
@@ -83,8 +84,8 @@ func TestContractAccountTypesMatchTheDomain(t *testing.T) {
 		account.TypeSavings, account.TypeInvestment, account.TypeOther,
 	}
 	contract := []openapi.AccountType{
-		openapi.Bank, openapi.Cash, openapi.CreditCard,
-		openapi.Savings, openapi.Investment, openapi.Other,
+		openapi.AccountTypeBank, openapi.AccountTypeCash, openapi.AccountTypeCreditCard,
+		openapi.AccountTypeSavings, openapi.AccountTypeInvestment, openapi.AccountTypeOther,
 	}
 	assertSameMembers(t, "account type",
 		toStrings(domain, func(t account.Type) string { return string(t) }),
@@ -135,6 +136,24 @@ func TestContractTransactionKindsAndStatusesMatchTheDomain(t *testing.T) {
 	for _, value := range statuses {
 		if !transaction.Status(value).Valid() {
 			t.Fatalf("contract transaction status %q is rejected by the domain", value)
+		}
+	}
+}
+
+// The granularity a client sends becomes a SQL bucket width, so an unmatched member is not
+// merely unreachable: it is a value the transport would accept and the query could not use.
+func TestContractAnalysisGranularitiesMatchTheDomain(t *testing.T) {
+	domain := []analysis.Granularity{
+		analysis.GranularityDay, analysis.GranularityWeek, analysis.GranularityMonth,
+	}
+	contract := []openapi.AnalysisGranularity{openapi.Day, openapi.Week, openapi.Month}
+	assertSameMembers(t, "analysis granularity",
+		toStrings(domain, func(g analysis.Granularity) string { return string(g) }),
+		toStrings(contract, func(g openapi.AnalysisGranularity) string { return string(g) }),
+	)
+	for _, value := range contract {
+		if !analysis.Granularity(value).Valid() {
+			t.Fatalf("contract analysis granularity %q is rejected by the domain", value)
 		}
 	}
 }

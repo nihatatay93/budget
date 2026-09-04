@@ -18,6 +18,7 @@ const sessionCookieName = "budget_session"
 type server struct {
 	Services
 	cookieSecure bool
+	sessionTTL   time.Duration
 }
 
 var _ openapi.StrictServerInterface = (*server)(nil)
@@ -144,10 +145,17 @@ func (s *server) GetSession(
 	}, nil
 }
 
+// sessionCookie carries the same lifetime as the session it names.
+//
+// Without Max-Age the browser discards it on close, so a web session ended at the whim of a
+// window while the server still held it for the configured TTL — a lifetime the operator had
+// set and the product then ignored. Expiring together means the cookie stops working when
+// the session does, and not before.
 func (s *server) sessionCookie(token string) string {
 	return (&http.Cookie{
 		Name: sessionCookieName, Value: token, Path: "/", HttpOnly: true,
 		Secure: s.cookieSecure, SameSite: http.SameSiteLaxMode,
+		MaxAge: int(s.sessionTTL.Seconds()),
 	}).String()
 }
 

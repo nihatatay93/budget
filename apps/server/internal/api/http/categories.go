@@ -176,8 +176,18 @@ func categoryWriteInput(input openapi.CategoryWriteRequest) category.WriteInput 
 		value := input.ParentId.String()
 		parentID = &value
 	}
+	var iconType, colorKey *string
+	if input.IconType != nil {
+		value := string(*input.IconType)
+		iconType = &value
+	}
+	if input.ColorKey != nil {
+		value := string(*input.ColorKey)
+		colorKey = &value
+	}
 	return category.WriteInput{
 		Name: input.Name, Kind: category.Kind(input.Kind), ParentID: parentID, Icon: input.Icon,
+		IconType: iconType, IconValue: input.IconValue, ColorKey: colorKey,
 	}
 }
 
@@ -192,7 +202,9 @@ func categoryResponse(value category.Category) (openapi.Category, error) {
 	}
 	response := openapi.Category{
 		Id: id, WorkspaceId: workspaceID, Name: value.Name,
-		Kind: openapi.CategoryKind(value.Kind), Icon: value.Icon, ArchivedAt: value.ArchivedAt,
+		Kind: openapi.CategoryKind(value.Kind), Icon: value.Icon,
+		IconType: openapi.CategoryIconType(value.Appearance.IconType), IconValue: value.Appearance.IconValue,
+		ColorKey: openapi.CategoryColorKey(value.Appearance.ColorKey), ArchivedAt: value.ArchivedAt,
 	}
 	if value.ParentID != nil {
 		parentID, err := uuid.Parse(*value.ParentID)
@@ -204,6 +216,10 @@ func categoryResponse(value category.Category) (openapi.Category, error) {
 	if value.SystemKey != nil {
 		key := openapi.SystemCategoryKey(*value.SystemKey)
 		response.SystemKey = &key
+	}
+	if value.PredefinedKey != nil {
+		key := openapi.PredefinedCategoryKey(*value.PredefinedKey)
+		response.PredefinedKey = &key
 	}
 	return response, nil
 }

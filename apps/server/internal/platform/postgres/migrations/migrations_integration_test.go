@@ -330,6 +330,75 @@ func TestCollaborationMigrationRepairsLegacyOwnerlessWorkspace(t *testing.T) {
 	}
 }
 
+func TestCategoryAppearanceMigrationBackfillsLegacyAndPredefinedCategories(t *testing.T) {
+	ctx := context.Background()
+	db, provider := migrationDatabase(t, ctx)
+	if _, err := provider.UpTo(ctx, 7); err != nil {
+		t.Fatalf("apply migrations through 00007: %v", err)
+	}
+
+	var userID, workspaceID string
+	if err := db.QueryRowContext(ctx, `
+		INSERT INTO users (email, password_hash, display_name)
+		VALUES ('legacy-appearance@example.com', 'not-a-real-hash', 'Legacy Appearance')
+		RETURNING id
+	`).Scan(&userID); err != nil {
+		t.Fatalf("insert legacy user: %v", err)
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("begin legacy workspace: %v", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := tx.QueryRowContext(ctx, `
+		INSERT INTO workspaces (name, base_currency, timezone, created_by)
+		VALUES ('Legacy Appearance', 'TRY', 'Europe/Istanbul', $1)
+		RETURNING id
+	`, userID).Scan(&workspaceID); err != nil {
+		t.Fatalf("insert legacy workspace: %v", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO workspace_members (workspace_id, user_id, role) VALUES ($1, $2, 'owner')
+	`, workspaceID, userID); err != nil {
+		t.Fatalf("insert legacy owner: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("commit legacy workspace: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `
+		INSERT INTO categories (workspace_id, name, kind, icon) VALUES ($1, 'Treats', 'expense', '🍰')
+	`, workspaceID); err != nil {
+		t.Fatalf("insert legacy emoji category: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, `
+		INSERT INTO categories (workspace_id, name, kind, predefined_key, icon)
+		VALUES ($1, 'groceries', 'expense', 'groceries', 'shopping-cart')
+	`, workspaceID); err != nil {
+		t.Fatalf("insert legacy predefined category: %v", err)
+	}
+
+	if _, err := provider.UpTo(ctx, 8); err != nil {
+		t.Fatalf("apply category appearance migration: %v", err)
+	}
+	var iconType, iconValue, colorKey string
+	if err := db.QueryRowContext(ctx, `
+		SELECT icon_type, icon_value, color_key FROM categories WHERE workspace_id = $1 AND name = 'Treats'
+	`, workspaceID).Scan(&iconType, &iconValue, &colorKey); err != nil {
+		t.Fatalf("read migrated custom category: %v", err)
+	}
+	if iconType != "emoji" || iconValue != "🍰" || colorKey != "slate" {
+		t.Fatalf("custom appearance = %q/%q/%q, want emoji/🍰/slate", iconType, iconValue, colorKey)
+	}
+	if err := db.QueryRowContext(ctx, `
+		SELECT icon_type, icon_value, color_key FROM categories WHERE workspace_id = $1 AND predefined_key = 'groceries'
+	`, workspaceID).Scan(&iconType, &iconValue, &colorKey); err != nil {
+		t.Fatalf("read migrated predefined category: %v", err)
+	}
+	if iconType != "system" || iconValue != "shopping-cart" || colorKey != "green" {
+		t.Fatalf("predefined appearance = %q/%q/%q, want system/shopping-cart/green", iconType, iconValue, colorKey)
+	}
+}
+
 func migratedDatabase(t *testing.T, ctx context.Context) *sql.DB {
 	t.Helper()
 	db, provider := migrationDatabase(t, ctx)

@@ -16,7 +16,9 @@ import {
   MoneyAmount,
   StatusBadge,
 } from "../../components/Presentation";
+import { CategoryLabel } from "../../components/CategoryAppearance";
 import { type Currency, formatMoney } from "../../lib/currency";
+import { categoryName, t } from "../../lib/i18n";
 
 type Workspace = {
   id: string;
@@ -38,7 +40,7 @@ export function FinancialDashboard({ workspace }: { workspace: Workspace }) {
   function applyRange(event: FormEvent) {
     event.preventDefault();
     if (!fromDate || !toDate || fromDate > toDate) {
-      setRangeError("Choose a start date that is on or before the end date.");
+      setRangeError(t("Choose a start date that is on or before the end date."));
       return;
     }
     setRangeError("");
@@ -56,41 +58,41 @@ export function FinancialDashboard({ workspace }: { workspace: Workspace }) {
     <section className="financial-dashboard" aria-labelledby="financial-overview-heading">
       <div className="projection-heading">
         <div>
-          <p className="eyebrow">Ledger-derived overview</p>
-          <h2 id="financial-overview-heading">Financial overview</h2>
+          <p className="eyebrow">{t("Ledger-derived overview")}</p>
+          <h2 id="financial-overview-heading">{t("Financial overview")}</h2>
           <p className="projection-caption">
-            Posted figures are authoritative. Pending activity is shown separately.
+            {t("Posted figures are authoritative. Pending activity is shown separately.")}
           </p>
         </div>
         <form className="projection-range" onSubmit={applyRange}>
           <label>
-            From
+            {t("From")}
             <input
-              aria-label="Projection start date"
+              aria-label={t("Projection start date")}
               type="date"
               value={fromDate}
               onChange={(event) => setFromDate(event.target.value)}
             />
           </label>
           <label>
-            To
+            {t("To")}
             <input
-              aria-label="Projection end date"
+              aria-label={t("Projection end date")}
               type="date"
               value={toDate}
               onChange={(event) => setToDate(event.target.value)}
             />
           </label>
-          <button className="secondary-button" type="submit">Apply range</button>
+          <button className="secondary-button" type="submit">{t("Apply range")}</button>
           {range ? (
             <button className="text-button" type="button" onClick={resetRange}>
-              Current month
+              {t("Current month")}
             </button>
           ) : null}
         </form>
       </div>
       {rangeError ? <p className="form-error" role="alert">{rangeError}</p> : null}
-      {query.isLoading ? <LoadingState label="Loading financial report" rows={6} /> : null}
+      {query.isLoading ? <LoadingState label={t("Loading financial report")} rows={6} /> : null}
       {query.isError ? <ProjectionError error={query.error} retry={() => query.refetch()} /> : null}
       {query.data ? (
         <ProjectionContent projection={query.data} workspaceId={workspace.id} />
@@ -118,22 +120,22 @@ function ProjectionContent({
       </p>
       <div className="projection-summary-grid">
         <SummaryCard
-          label="Balance"
+          label={t("Balance")}
           amounts={projection.summary.balance_base_minor}
           currency={currency}
-          pendingLabel="Pending delta"
+          pendingLabel={t("Pending delta")}
         />
         <SummaryCard
-          label="Income"
+          label={t("Income")}
           amounts={projection.summary.income_base_minor}
           currency={currency}
-          pendingLabel="Pending income"
+          pendingLabel={t("Pending income")}
         />
         <SummaryCard
-          label="Spending"
+          label={t("Spending")}
           amounts={projection.summary.spending_base_minor}
           currency={currency}
-          pendingLabel="Pending spending"
+          pendingLabel={t("Pending spending")}
         />
       </div>
       <IncomeSpendingComparison projection={projection} />
@@ -142,17 +144,17 @@ function ProjectionContent({
         <section className="projection-detail" aria-labelledby="projection-accounts-heading">
           <div className="projection-detail-heading">
             <div>
-              <p className="eyebrow">Cumulative through period end</p>
-              <h3 id="projection-accounts-heading">Account balances</h3>
+              <p className="eyebrow">{t("Cumulative through period end")}</p>
+              <h3 id="projection-accounts-heading">{t("Account balances")}</h3>
             </div>
-            <Link to={`/workspaces/${workspaceId}/accounts`}>Manage accounts</Link>
+            <Link to={`/workspaces/${workspaceId}/accounts`}>{t("Manage accounts")}</Link>
           </div>
           {projection.accounts.length === 0 ? (
             <EmptyState
               compact
-              description="Create an account before recording financial activity."
+              description={t("Create an account before recording financial activity.")}
               icon="accounts"
-              title="No accounts yet"
+              title={t("No accounts yet")}
             />
           ) : (
             <div className="projection-list">
@@ -161,20 +163,19 @@ function ProjectionContent({
                   <div>
                     <strong>{account.name}</strong>
                     <small>
-                      {account.type.replaceAll("_", " ")}
-                      {account.archived_at ? " · archived" : ""}
+                      {t(`account.type.${account.type}`)}
+                      {account.archived_at ? ` · ${t("Archived")}` : ""}
                     </small>
                   </div>
                   <div className="projection-amount">
                     <strong>{formatMoney(account.native_balance_minor.posted, account.currency)}</strong>
                     {account.native_balance_minor.pending !== 0 ? (
                       <small>
-                        {signedMoney(account.native_balance_minor.pending, account.currency)} pending ·{" "}
-                        {formatMoney(account.native_balance_minor.projected, account.currency)} projected
+                        {t("{amount} pending · {projected} projected", { amount: signedMoney(account.native_balance_minor.pending, account.currency), projected: formatMoney(account.native_balance_minor.projected, account.currency) })}
                       </small>
                     ) : null}
                     {account.currency !== currency ? (
-                      <small>{formatMoney(account.base_balance_minor.posted, currency)} base</small>
+                      <small>{t("{amount} base", { amount: formatMoney(account.base_balance_minor.posted, currency) })}</small>
                     ) : null}
                   </div>
                 </article>
@@ -185,22 +186,22 @@ function ProjectionContent({
         <section className="projection-detail" aria-labelledby="projection-categories-heading">
           <div className="projection-detail-heading">
             <div>
-              <p className="eyebrow">Selected period</p>
-              <h3 id="projection-categories-heading">Category activity</h3>
+              <p className="eyebrow">{t("Selected period")}</p>
+              <h3 id="projection-categories-heading">{t("Category activity")}</h3>
             </div>
-            <Link to={`/workspaces/${workspaceId}/transactions`}>Review transactions</Link>
+            <Link to={`/workspaces/${workspaceId}/transactions`}>{t("Review transactions")}</Link>
           </div>
           <CategoryGroup
             categories={expenseCategories}
             currency={currency}
-            empty="No net expense activity in this period."
-            label="Spending"
+            empty={t("No net expense activity in this period.")}
+            label={t("Spending")}
           />
           <CategoryGroup
             categories={incomeCategories}
             currency={currency}
-            empty="No net income activity in this period."
-            label="Income"
+            empty={t("No net income activity in this period.")}
+            label={t("Income")}
           />
         </section>
       </div>
@@ -217,16 +218,16 @@ function IncomeSpendingComparison({ projection }: { projection: FinancialProject
   return (
     <section className="report-comparison" aria-labelledby="report-comparison-heading">
       <div>
-        <p className="eyebrow">Selected period</p>
-        <h3 id="report-comparison-heading">Income and spending</h3>
-        <p>Posted allocations only. Transfers and pending activity stay outside these totals.</p>
+        <p className="eyebrow">{t("Selected period")}</p>
+        <h3 id="report-comparison-heading">{t("Income and spending")}</h3>
+        <p>{t("Posted allocations only. Transfers and pending activity stay outside these totals.")}</p>
       </div>
       <div className="report-comparison-bars">
-        <ReportBar amount={income} currency={currency} label="Income" maximum={maximum} tone="income" />
-        <ReportBar amount={spending} currency={currency} label="Spending" maximum={maximum} tone="spending" />
+        <ReportBar amount={income} currency={currency} label={t("Income")} maximum={maximum} tone="income" />
+        <ReportBar amount={spending} currency={currency} label={t("Spending")} maximum={maximum} tone="spending" />
       </div>
       <div className="report-net-result">
-        <StatusBadge tone={net >= 0 ? "positive" : "warning"}>Net cash flow</StatusBadge>
+        <StatusBadge tone={net >= 0 ? "positive" : "warning"}>{t("Net cash flow")}</StatusBadge>
         <strong><MoneyAmount amount={net} currency={currency} signed /></strong>
       </div>
     </section>
@@ -292,7 +293,7 @@ function ReportReadout({
   return (
     <div className="projection-amount">
       <strong>{formatMoney(amount, currency)}</strong>
-      {pending !== 0 ? <small>{signedMoney(pending, currency)} pending</small> : null}
+      {pending !== 0 ? <small>{t("{amount} pending", { amount: signedMoney(pending, currency) })}</small> : null}
     </div>
   );
 }
@@ -300,10 +301,10 @@ function ReportReadout({
 function ReportHelp({ workspaceId }: { workspaceId: string }) {
   return (
     <InlineNotice
-      action={<Link to={`/workspaces/${workspaceId}/budget`}>Review monthly plan</Link>}
-      title="Reports explain what happened"
+      action={<Link to={`/workspaces/${workspaceId}/budget`}>{t("Review monthly plan")}</Link>}
+      title={t("Reports explain what happened")}
     >
-      <p>Use Budget to plan category targets; this view stays focused on ledger-derived results.</p>
+      <p>{t("Use Budget to plan category targets; this view stays focused on ledger-derived results.")}</p>
     </InlineNotice>
   );
 }
@@ -323,13 +324,13 @@ function SummaryCard({
     <article className="projection-summary-card">
       <span>{label}</span>
       <strong><MoneyAmount amount={amounts.posted} currency={currency} /></strong>
-      <small>Posted</small>
+      <small>{t("Posted")}</small>
       <div>
         <span>{pendingLabel}</span>
         <b>{signedMoney(amounts.pending, currency)}</b>
       </div>
       <div>
-        <span>Projected total</span>
+        <span>{t("Projected total")}</span>
         <b><MoneyAmount amount={amounts.projected} currency={currency} /></b>
       </div>
     </article>
@@ -361,19 +362,19 @@ function CategoryGroup({
       {active.map((category) => (
         <article className="projection-row" key={category.id}>
           <div style={{ paddingInlineStart: `${categoryDepth(category, categories) * 1.1}rem` }}>
-            <strong>{category.icon ? `${category.icon} ` : ""}{category.name}</strong>
+            <strong><CategoryLabel colorKey={category.color_key} iconType={category.icon_type} iconValue={category.icon_value ?? category.icon} name={categoryName(category)} /></strong>
             <small>
               {categories.some((candidate) => candidate.parent_id === category.id)
-                ? "Includes subcategories"
-                : "Category total"}
-              {category.archived_at ? " · archived" : ""}
+                ? t("Includes subcategories")
+                : t("Category total")}
+              {category.archived_at ? ` · ${t("Archived")}` : ""}
             </small>
           </div>
           <div className="projection-category-value">
             <CategoryVisual
               amount={category.rolled_up_base_minor.posted}
               currency={currency}
-              label={`${category.name} posted ${label.toLowerCase()}`}
+              label={`${categoryName(category)} posted ${label.toLowerCase()}`}
               maximum={maximum}
             />
             <ReportReadout
@@ -389,18 +390,18 @@ function CategoryGroup({
 }
 
 function ProjectionError({ error, retry }: { error: Error; retry: () => void }) {
-  const message = error instanceof APIError ? error.message : "The financial overview could not be loaded.";
+  const message = error instanceof APIError ? error.message : t("The financial overview could not be loaded.");
   return (
     <div className="projection-error" role="alert">
       <p>{message}</p>
-      <button className="secondary-button" type="button" onClick={retry}>Try again</button>
+      <button className="secondary-button" type="button" onClick={retry}>{t("Try again")}</button>
     </div>
   );
 }
 
 function signedMoney(amount: number, currency: Currency): string {
   const formatted = formatMoney(amount, currency);
-  return amount > 0 && formatted !== "Amount unavailable" ? `+${formatted}` : formatted;
+  return amount > 0 && Number.isSafeInteger(amount) ? `+${formatted}` : formatted;
 }
 
 function formatDate(value: string): string {

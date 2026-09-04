@@ -10,9 +10,11 @@ final class AppModel: ObservableObject {
     @Published private(set) var exchangeRates: [BudgetExchangeRate] = []
     @Published private(set) var transactions: [BudgetTransaction] = []
     @Published private(set) var financialProjection: BudgetFinancialProjection?
+    @Published private(set) var spendingAnalysis: BudgetSpendingAnalysis?
     @Published private(set) var monthlyBudget: MonthlyBudgetPlan?
     @Published private(set) var isLoadingResources = false
     @Published private(set) var isLoadingProjection = false
+    @Published private(set) var isLoadingAnalysis = false
     @Published private(set) var isLoadingBudget = false
     @Published private(set) var isSavingResource = false
     @Published var resourceErrorMessage: String?
@@ -21,6 +23,7 @@ final class AppModel: ObservableObject {
     /// Disclosed once when an invitation is created; held only long enough to show it.
     @Published var issuedInvitation: BudgetIssuedInvitation?
     @Published var budgetErrorMessage: String?
+    @Published var analysisErrorMessage: String?
     @Published var errorMessage: String?
     @Published var serverAddress: String
 
@@ -30,9 +33,11 @@ final class AppModel: ObservableObject {
     private var token: String?
     private var activeResourceWorkspaceID: String?
     private var activeProjectionRange: BudgetProjectionRange?
+    private var activeAnalysisRange: BudgetAnalysisRange?
     private var activeBudgetMonth: String?
     private var resourceLoadSequence = 0
     private var projectionLoadSequence = 0
+    private var analysisLoadSequence = 0
     private var budgetLoadSequence = 0
 
     init(environment: AppEnvironment) {
@@ -102,20 +107,25 @@ final class AppModel: ObservableObject {
         exchangeRates = []
         transactions = []
         financialProjection = nil
+        spendingAnalysis = nil
         monthlyBudget = nil
         members = []
         invitations = []
         issuedInvitation = nil
         activeResourceWorkspaceID = nil
         activeProjectionRange = nil
+        activeAnalysisRange = nil
         activeBudgetMonth = nil
         resourceLoadSequence += 1
         projectionLoadSequence += 1
+        analysisLoadSequence += 1
         budgetLoadSequence += 1
         isLoadingBudget = false
+        isLoadingAnalysis = false
         errorMessage = nil
         resourceErrorMessage = nil
         budgetErrorMessage = nil
+        analysisErrorMessage = nil
         isSubmitting = false
     }
 
@@ -127,15 +137,20 @@ final class AppModel: ObservableObject {
             exchangeRates = []
             transactions = []
             financialProjection = nil
+            spendingAnalysis = nil
             monthlyBudget = nil
             members = []
             invitations = []
             issuedInvitation = nil
             activeProjectionRange = nil
+            activeAnalysisRange = nil
             activeBudgetMonth = nil
             budgetErrorMessage = nil
+            analysisErrorMessage = nil
             budgetLoadSequence += 1
+            analysisLoadSequence += 1
             isLoadingBudget = false
+            isLoadingAnalysis = false
         }
         activeResourceWorkspaceID = workspaceID
         resourceLoadSequence += 1
@@ -232,6 +247,42 @@ final class AppModel: ObservableObject {
         } catch {
             guard activeResourceWorkspaceID == workspaceID, projectionLoadSequence == loadSequence else { return }
             handleResourceError(error)
+        }
+    }
+
+    /// Analysis is loaded only by its own screen, so it never rides along with the resource
+    /// fetch the way the projection does. Changing the window clears the previous result
+    /// first: leaving a stale chart on screen under a new period label reads as data.
+    func loadSpendingAnalysis(workspaceID: String, range: BudgetAnalysisRange?) async {
+        guard let context = resourceContext(), activeResourceWorkspaceID == workspaceID else { return }
+        if activeAnalysisRange != range {
+            spendingAnalysis = nil
+        }
+        activeAnalysisRange = range
+        analysisLoadSequence += 1
+        let loadSequence = analysisLoadSequence
+        isLoadingAnalysis = true
+        analysisErrorMessage = nil
+        defer {
+            if analysisLoadSequence == loadSequence {
+                isLoadingAnalysis = false
+            }
+        }
+        do {
+            let analysis = try await apiClient.spendingAnalysis(
+                serverURL: context.serverURL,
+                token: context.token,
+                workspaceID: workspaceID,
+                range: range
+            )
+            guard activeResourceWorkspaceID == workspaceID,
+                  analysisLoadSequence == loadSequence,
+                  activeAnalysisRange == range else { return }
+            spendingAnalysis = analysis
+        } catch {
+            guard activeResourceWorkspaceID == workspaceID,
+                  analysisLoadSequence == loadSequence else { return }
+            handleAnalysisError(error)
         }
     }
 
@@ -555,7 +606,7 @@ final class AppModel: ObservableObject {
 
     private func resourceContext() -> (serverURL: URL, token: String)? {
         guard let token, let serverURL = validatedServerURL(showError: false) else {
-            resourceErrorMessage = "Sign in again to continue."
+            resourceErrorMessage = L10n.text("Sign in again to continue.")
             return nil
         }
         return (serverURL, token)
@@ -598,14 +649,18 @@ final class AppModel: ObservableObject {
             exchangeRates = []
             transactions = []
             financialProjection = nil
+            spendingAnalysis = nil
             monthlyBudget = nil
             activeResourceWorkspaceID = nil
             activeProjectionRange = nil
+            activeAnalysisRange = nil
             activeBudgetMonth = nil
             resourceLoadSequence += 1
             projectionLoadSequence += 1
+            analysisLoadSequence += 1
             budgetLoadSequence += 1
             isLoadingBudget = false
+            isLoadingAnalysis = false
             try? sessionStore.deleteToken()
         }
         resourceErrorMessage = error.localizedDescription
@@ -618,8 +673,15 @@ final class AppModel: ObservableObject {
         budgetErrorMessage = error.localizedDescription
     }
 
+    private func handleAnalysisError(_ error: Error) {
+        if case APIClientError.unauthorized = error {
+            handleResourceError(error)
+        }
+        analysisErrorMessage = error.localizedDescription
+    }
+
     private func validatedServerURL(showError: Bool = true) -> URL? {
-        let normalized = serverAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = ServerAddressPolicy.addressWithInferredScheme(serverAddress)
         guard let components = URLComponents(string: normalized),
               let scheme = components.scheme?.lowercased(),
               let host = components.host,
@@ -627,10 +689,11 @@ final class AppModel: ObservableObject {
               components.path.isEmpty || components.path == "/",
               components.query == nil,
               components.fragment == nil,
-              scheme == "https" || (scheme == "http" && ["localhost", "127.0.0.1"].contains(host)),
+              scheme == "https"
+                || (scheme == "http" && ServerAddressPolicy.allowsPlaintextHTTP(host: host)),
               let url = components.url else {
             if showError {
-                errorMessage = "Use an HTTPS server URL, or HTTP for localhost development."
+                errorMessage = ServerAddressPolicy.addressGuidance
             }
             return nil
         }

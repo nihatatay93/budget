@@ -68,6 +68,6 @@ struct KeychainError: LocalizedError {
     let status: OSStatus
 
     var errorDescription: String? {
-        SecCopyErrorMessageString(status, nil) as String? ?? "Keychain operation failed."
+        SecCopyErrorMessageString(status, nil) as String? ?? L10n.text("Keychain operation failed.")
     }
 }

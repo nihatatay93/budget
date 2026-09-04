@@ -9,15 +9,7 @@ enum WorkspaceTab: String, CaseIterable, Identifiable {
 
     var id: Self { self }
 
-    var title: String {
-        switch self {
-        case .overview: "Overview"
-        case .transactions: "Transactions"
-        case .budget: "Budget"
-        case .accounts: "Accounts"
-        case .more: "More"
-        }
-    }
+    var title: String { L10n.text("tab.\(rawValue)") }
 
     var systemImage: String {
         switch self {

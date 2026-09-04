@@ -12,6 +12,7 @@ import (
 	postgrescontainer "github.com/testcontainers/testcontainers-go/modules/postgres"
 
 	"github.com/nihatatay93/budget/internal/auth"
+	"github.com/nihatatay93/budget/internal/category"
 	cryptoplatform "github.com/nihatatay93/budget/internal/platform/crypto"
 )
 
@@ -57,7 +58,10 @@ func TestAuthRepositoryRegistrationLifecycle(t *testing.T) {
 		t.Fatalf("register: %v", err)
 	}
 
-	var members, categories, sessions int
+	// Counted from the canonical list: a magic number here goes stale every time a
+	// predefined category is added, and reports the addition as a repository failure.
+	wantPredefined := len(category.PredefinedCategories())
+	var members, categories, predefinedCategories, sessions int
 	var persistedHash []byte
 	var transport string
 	if err := store.Pool().QueryRow(ctx, `SELECT COUNT(*) FROM workspace_members`).Scan(&members); err != nil {
@@ -65,6 +69,9 @@ func TestAuthRepositoryRegistrationLifecycle(t *testing.T) {
 	}
 	if err := store.Pool().QueryRow(ctx, `SELECT COUNT(*) FROM categories WHERE system_key IS NOT NULL`).Scan(&categories); err != nil {
 		t.Fatalf("count system categories: %v", err)
+	}
+	if err := store.Pool().QueryRow(ctx, `SELECT COUNT(*) FROM categories WHERE predefined_key IS NOT NULL`).Scan(&predefinedCategories); err != nil {
+		t.Fatalf("count predefined categories: %v", err)
 	}
 	if err := store.Pool().QueryRow(ctx, `SELECT COUNT(*) FROM sessions`).Scan(&sessions); err != nil {
 		t.Fatalf("count sessions: %v", err)
@@ -74,10 +81,26 @@ func TestAuthRepositoryRegistrationLifecycle(t *testing.T) {
 	); err != nil {
 		t.Fatalf("read sessions: %v", err)
 	}
-	if members != 1 || categories != 2 || sessions != 1 || transport != "bearer" {
+	if members != 1 || categories != 2 || predefinedCategories != wantPredefined || sessions != 1 || transport != "bearer" {
 		t.Fatalf(
-			"registration rows = members %d, categories %d, sessions %d, transport %q",
-			members, categories, sessions, transport,
+			"registration rows = members %d, categories %d, predefined categories %d, sessions %d, transport %q",
+			members, categories, predefinedCategories, sessions, transport,
+		)
+	}
+	categoryRepository := NewCategoryRepository(store.Pool())
+	if len(result.Workspaces) != 1 {
+		t.Fatalf("registered workspaces = %d, want 1", len(result.Workspaces))
+	}
+	if err := categoryRepository.EnsurePredefined(ctx, result.Workspaces[0].ID); err != nil {
+		t.Fatalf("ensure predefined categories: %v", err)
+	}
+	if err := store.Pool().QueryRow(ctx, `SELECT COUNT(*) FROM categories WHERE predefined_key IS NOT NULL`).Scan(&predefinedCategories); err != nil {
+		t.Fatalf("recount predefined categories: %v", err)
+	}
+	if predefinedCategories != wantPredefined {
+		t.Fatalf(
+			"predefined categories after repeat = %d, want %d",
+			predefinedCategories, wantPredefined,
 		)
 	}
 	if string(persistedHash) == result.Token {

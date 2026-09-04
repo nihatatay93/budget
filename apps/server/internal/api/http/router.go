@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"reflect"
 	"strings"
+	"time"
 
 	openapi "github.com/nihatatay93/budget/internal/api/openapi"
 	"github.com/nihatatay93/budget/internal/webui"
@@ -29,6 +30,7 @@ type Services struct {
 	Transactions   transactionService
 	Budgets        budgetService
 	Reporting      reportingService
+	Analysis       analysisService
 	Collaboration  collaborationService
 
 	// ExchangeRates is optional. A nil value means the operator did not enable rate
@@ -50,6 +52,9 @@ type Options struct {
 	AuthRateBurst int
 	// HSTS is sent only when the deployment terminates TLS.
 	HSTS bool
+	// SessionTTL is how long an issued session lasts. The session cookie is given the same
+	// lifetime so a browser stops presenting a credential the server has already expired.
+	SessionTTL time.Duration
 }
 
 // NewRouter builds the HTTP handler. It reports every missing required service at once so a
@@ -74,7 +79,11 @@ func NewRouter(services Services, options Options) (http.Handler, error) {
 
 	mux := http.NewServeMux()
 	strictServer := openapi.NewStrictHandlerWithOptions(
-		&server{Services: services, cookieSecure: options.CookieSecure},
+		&server{
+			Services:     services,
+			cookieSecure: options.CookieSecure,
+			sessionTTL:   options.SessionTTL,
+		},
 		[]openapi.StrictMiddlewareFunc{
 			authenticationMiddleware(services.Authentication, options.PublicOrigin),
 		},
@@ -137,6 +146,7 @@ func (s Services) validate() error {
 		{"Transactions", s.Transactions},
 		{"Budgets", s.Budgets},
 		{"Reporting", s.Reporting},
+		{"Analysis", s.Analysis},
 		{"Collaboration", s.Collaboration},
 	}
 	missing := make([]string, 0, len(required))

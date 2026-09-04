@@ -24,7 +24,9 @@ import {
   ToastRegion,
   type ToastMessage,
 } from "../../components/Presentation";
+import { CategoryLabel } from "../../components/CategoryAppearance";
 import { formatMoney, majorAmountInput, parseMajorAmount } from "../../lib/currency";
+import { categoryName, t } from "../../lib/i18n";
 import { monthLabel, workspaceMonth } from "../../lib/month";
 
 type Workspace = SessionResponse["workspaces"][number];
@@ -64,7 +66,7 @@ export function BudgetPanel({ workspace, canManage }: { workspace: Workspace; ca
       })));
       setValidation("");
     } else if (noBudget) {
-      setName(`${monthLabel(month)} plan`);
+      setName(t("{month} plan", { month: monthLabel(month) }));
       setItems([]);
       setValidation("");
     }
@@ -76,7 +78,7 @@ export function BudgetPanel({ workspace, canManage }: { workspace: Workspace; ca
     onSuccess: (value) => {
       queryClient.setQueryData(monthlyBudgetQueryKey(workspace.id, month), value);
       setEditing(false);
-      setToasts([{ id: `budget-${value.updated_at}`, title: "Monthly plan saved", tone: "positive" }]);
+      setToasts([{ id: `budget-${value.updated_at}`, title: t("Monthly plan saved"), tone: "positive" }]);
     },
   });
 
@@ -84,6 +86,10 @@ export function BudgetPanel({ workspace, canManage }: { workspace: Workspace; ca
     () => (categoriesQuery.data ?? []).filter(
       (category) => category.kind === "expense" && !category.archived_at,
     ),
+    [categoriesQuery.data],
+  );
+  const categoryById = useMemo(
+    () => new Map((categoriesQuery.data ?? []).map((category) => [category.id, category])),
     [categoriesQuery.data],
   );
 
@@ -109,7 +115,7 @@ export function BudgetPanel({ workspace, canManage }: { workspace: Workspace; ca
     setValidation("");
     const normalizedName = name.trim();
     if (!normalizedName || items.length === 0) {
-      setValidation("Give the plan a name and add at least one expense category.");
+      setValidation(t("Give the plan a name and add at least one expense category."));
       return;
     }
     const selected = new Set<string>();
@@ -118,23 +124,23 @@ export function BudgetPanel({ workspace, canManage }: { workspace: Workspace; ca
     for (const item of items) {
       const amount = parseMajorAmount(item.amount);
       if (!item.categoryId || amount === null || amount <= 0) {
-        setValidation("Every budget item needs an expense category and a positive amount.");
+        setValidation(t("Every budget item needs an expense category and a positive amount."));
         return;
       }
       if (selected.has(item.categoryId)) {
-        setValidation("Each category can appear only once in a monthly plan.");
+        setValidation(t("Each category can appear only once in a monthly plan."));
         return;
       }
       selected.add(item.categoryId);
       total += amount;
       if (!Number.isSafeInteger(total)) {
-        setValidation("The planned total is too large.");
+        setValidation(t("The planned total is too large."));
         return;
       }
       writes.push({ category_id: item.categoryId, amount_base_minor: amount });
     }
     if (hasBranchOverlap(selected, categoriesQuery.data ?? [])) {
-      setValidation("Choose a category or its subcategories, not both.");
+      setValidation(t("Choose a category or its subcategories, not both."));
       return;
     }
     save.mutate({ name: normalizedName, items: writes });
@@ -144,13 +150,13 @@ export function BudgetPanel({ workspace, canManage }: { workspace: Workspace; ca
     <section className="budget-panel" aria-labelledby="monthly-budget-heading">
       <div className="budget-heading">
         <div>
-          <p className="eyebrow">Posted allocation plan</p>
-          <h2 id="monthly-budget-heading">Monthly budget</h2>
-          <p>Refunds reduce usage; pending transactions stay outside the authoritative total.</p>
+          <p className="eyebrow">{t("Posted allocation plan")}</p>
+          <h2 id="monthly-budget-heading">{t("Monthly budget")}</h2>
+          <p>{t("Refunds reduce usage; pending transactions stay outside the authoritative total.")}</p>
         </div>
-        <div className="budget-month-navigation" aria-label="Budget month navigation">
+        <div className="budget-month-navigation" aria-label={t("Budget month navigation")}>
           <button
-            aria-label="Previous month"
+            aria-label={t("Previous month")}
             className="month-step-button"
             onClick={() => changeMonth(shiftMonth(month, -1))}
             type="button"
@@ -158,16 +164,16 @@ export function BudgetPanel({ workspace, canManage }: { workspace: Workspace; ca
             ‹
           </button>
           <label className="budget-month-picker">
-            <span className="visually-hidden">Month</span>
+            <span className="visually-hidden">{t("Month")}</span>
             <input
-              aria-label="Budget month"
+              aria-label={t("Budget month")}
               type="month"
               value={month}
               onChange={(event) => changeMonth(event.target.value)}
             />
           </label>
           <button
-            aria-label="Next month"
+            aria-label={t("Next month")}
             className="month-step-button"
             onClick={() => changeMonth(shiftMonth(month, 1))}
             type="button"
@@ -177,11 +183,11 @@ export function BudgetPanel({ workspace, canManage }: { workspace: Workspace; ca
         </div>
       </div>
 
-      {budgetQuery.isPending ? <LoadingState label="Loading monthly budget" rows={5} /> : null}
+      {budgetQuery.isPending ? <LoadingState label={t("Loading monthly budget")} rows={5} /> : null}
       {budgetQuery.isError && !noBudget ? (
         <InlineNotice
-          action={<button className="secondary-button" type="button" onClick={() => void budgetQuery.refetch()}>Try again</button>}
-          title="This plan could not be loaded"
+          action={<button className="secondary-button" type="button" onClick={() => void budgetQuery.refetch()}>{t("Try again")}</button>}
+          title={t("This plan could not be loaded")}
           tone="danger"
         >
           <p>{budgetQuery.error.message}</p>
@@ -189,51 +195,51 @@ export function BudgetPanel({ workspace, canManage }: { workspace: Workspace; ca
       ) : null}
       {noBudget ? (
         <EmptyState
-          action={canManage ? <button onClick={() => setEditing(true)} type="button">Create plan</button> : undefined}
-          description="Set category targets to give every posted expense a monthly context."
+          action={canManage ? <button onClick={() => setEditing(true)} type="button">{t("Create plan")}</button> : undefined}
+          description={t("Set category targets to give every posted expense a monthly context.")}
           icon="budget"
-          title={`No plan exists for ${monthLabel(month)} yet`}
+          title={t("No plan exists for {month} yet", { month: monthLabel(month) })}
         />
       ) : null}
       {budgetQuery.data ? (
         <BudgetUsage
-          action={canManage ? <button className="secondary-button" onClick={() => setEditing(true)} type="button">Edit plan</button> : undefined}
+          action={canManage ? <button className="secondary-button" onClick={() => setEditing(true)} type="button">{t("Edit plan")}</button> : undefined}
           value={budgetQuery.data}
         />
       ) : null}
 
       {!budgetQuery.isPending && (budgetQuery.data || noBudget) && canManage ? (
         <ModalDialog
-          description="Set complete category targets for this month. Saving replaces the current monthly plan."
+          description={t("Set complete category targets for this month. Saving replaces the current monthly plan.")}
           footer={(
             <>
-              <button className="secondary-button" onClick={() => setEditing(false)} type="button">Cancel</button>
+              <button className="secondary-button" onClick={() => setEditing(false)} type="button">{t("Cancel")}</button>
               <button disabled={save.isPending} form="monthly-budget-form" type="submit">
-                {save.isPending ? "Saving…" : "Save monthly plan"}
+                {save.isPending ? t("Saving…") : t("Save monthly plan")}
               </button>
             </>
           )}
           onClose={() => setEditing(false)}
           open={editing}
           placement="drawer"
-          title={budgetQuery.data ? `Edit ${monthLabel(month)} plan` : `Plan ${monthLabel(month)}`}
+          title={budgetQuery.data ? t("Edit {month} plan", { month: monthLabel(month) }) : t("Plan {month}", { month: monthLabel(month) })}
         >
           <form className="budget-form" id="monthly-budget-form" onSubmit={submit}>
           <div className="budget-form-heading">
-            <h3>{budgetQuery.data ? "Edit complete plan" : "Create this plan"}</h3>
-            <span>Amounts use {workspace.base_currency}. Posted allocations determine usage.</span>
+            <h3>{budgetQuery.data ? t("Edit complete plan") : t("Create this plan")}</h3>
+            <span>{t("Amounts use {currency}. Posted allocations determine usage.", { currency: workspace.base_currency })}</span>
           </div>
           <label>
-            Plan name
+            {t("Plan name")}
             <input required maxLength={100} value={name} onChange={(event) => setName(event.target.value)} />
           </label>
           <div className="budget-drafts">
             {items.map((item, index) => (
               <div className="budget-draft" key={item.key}>
                 <label>
-                  Expense category
+                  {t("Expense category")}
                   <select
-                    aria-label={`Budget category ${index + 1}`}
+                    aria-label={t("Budget category {number}", { number: index + 1 })}
                     value={item.categoryId}
                     onChange={(event) => setItems((current) => current.map((candidate) =>
                       candidate.key === item.key
@@ -241,16 +247,17 @@ export function BudgetPanel({ workspace, canManage }: { workspace: Workspace; ca
                         : candidate,
                     ))}
                   >
-                    <option value="">Choose category</option>
+                    <option value="">{t("Choose category")}</option>
                     {budgetCategoryOptions(item, activeExpenseCategories, budgetQuery.data).map((category) => (
                       <option key={category.id} value={category.id}>{category.label}</option>
                     ))}
                   </select>
+                  {categoryById.get(item.categoryId) ? <CategoryLabel {...categoryAppearance(categoryById.get(item.categoryId)!)} /> : null}
                 </label>
                 <label>
-                  Planned amount
+                  {t("Planned amount")}
                   <input
-                    aria-label={`Budget amount ${index + 1}`}
+                    aria-label={t("Budget amount {number}", { number: index + 1 })}
                     inputMode="decimal"
                     placeholder="0.00"
                     value={item.amount}
@@ -264,26 +271,26 @@ export function BudgetPanel({ workspace, canManage }: { workspace: Workspace; ca
                   type="button"
                   onClick={() => setItems((current) => current.filter((candidate) => candidate.key !== item.key))}
                 >
-                  Remove
+                  {t("Remove")}
                 </button>
               </div>
             ))}
           </div>
           <button className="secondary-button budget-add" type="button" onClick={addItem}>
-            Add category
+            {t("Add category")}
           </button>
           {validation ? <p className="form-error" role="alert">{validation}</p> : null}
           {save.error ? (
             <p className="form-error" role="alert">
-              {save.error instanceof APIError ? save.error.message : "The monthly plan could not be saved."}
+              {save.error instanceof APIError ? save.error.message : t("The monthly plan could not be saved.")}
             </p>
           ) : null}
           </form>
         </ModalDialog>
       ) : null}
       {!budgetQuery.isPending && (budgetQuery.data || noBudget) && !canManage ? (
-        <InlineNotice title="Read-only budget">
-          <p>Viewer access can review budget usage but cannot change the plan.</p>
+        <InlineNotice title={t("Read-only budget")}>
+          <p>{t("Viewer access can review budget usage but cannot change the plan.")}</p>
         </InlineNotice>
       ) : null}
       <ToastRegion messages={toasts} onDismiss={(id) => setToasts((current) => current.filter((toast) => toast.id !== id))} />
@@ -304,16 +311,15 @@ function BudgetUsage({ action, value }: { action?: ReactNode; value: MonthlyBudg
         {action}
       </div>
       <div className="budget-total-grid">
-        <BudgetTotal label="Planned" value={value.planned_base_minor} currency={value.base_currency} />
-        <BudgetTotal label="Used" value={value.used_base_minor} currency={value.base_currency} />
-        <BudgetTotal
-          label={value.remaining_base_minor < 0 ? "Over plan" : "Remaining"}
+        <BudgetTotal label={t("Planned")} value={value.planned_base_minor} currency={value.base_currency} />
+        <BudgetTotal label={t("Used")} value={value.used_base_minor} currency={value.base_currency} />
+        <BudgetTotal label={value.remaining_base_minor < 0 ? t("Over plan") : t("Remaining")}
           tone={value.remaining_base_minor < 0 ? "danger" : "positive"}
           value={Math.abs(value.remaining_base_minor)}
           currency={value.base_currency}
         />
       </div>
-      <ProgressMeter label="Total monthly budget usage" tone={totalTone} value={totalProgress} />
+      <ProgressMeter label={t("Total monthly budget usage")} tone={totalTone} value={totalProgress} />
       <div className="budget-item-list">
         {value.items.map((item) => {
           const progress = budgetProgress(item.used_base_minor, item.planned_base_minor);
@@ -324,23 +330,29 @@ function BudgetUsage({ action, value }: { action?: ReactNode; value: MonthlyBudg
             <article className="budget-usage-item" key={item.id}>
               <div className="budget-usage-copy">
                 <div>
-                  <strong>{item.category_icon ? `${item.category_icon} ` : ""}{item.category_name}</strong>
-                  <small>{item.category_archived_at ? "Archived category · " : ""}Includes subcategories</small>
+                  <strong><CategoryLabel colorKey={item.category_color_key} iconType={item.category_icon_type} iconValue={item.category_icon_value ?? item.category_icon} name={categoryName({ name: item.category_name, predefined_key: item.category_predefined_key })} /></strong>
+                  <small>{item.category_archived_at ? `${t("Archived category")} · ` : ""}{t("Includes subcategories")}</small>
                 </div>
                 <div>
                   <strong><MoneyAmount amount={item.used_base_minor} currency={value.base_currency} signed={isRefund} /></strong>
-                  <small>of {formatMoney(item.planned_base_minor, value.base_currency)}</small>
+                  <small>{t("of {amount}", { amount: formatMoney(item.planned_base_minor, value.base_currency) })}</small>
                 </div>
               </div>
-              <ProgressMeter label={`${item.category_name} budget usage`} tone={tone} value={progress} />
+              <ProgressMeter
+                label={t("{category} budget usage", {
+                  category: categoryName({ name: item.category_name, predefined_key: item.category_predefined_key }),
+                })}
+                tone={tone}
+                value={progress}
+              />
               <div className="budget-item-status">
                 <StatusBadge tone={isOver ? "danger" : isRefund ? "positive" : progress >= 85 ? "warning" : "neutral"}>
-                  {isOver ? "Over budget" : isRefund ? "Net refund" : progress >= 85 ? "Nearly used" : "On track"}
+                  {isOver ? t("Over budget") : isRefund ? t("Net refund") : progress >= 85 ? t("Nearly used") : t("On track")}
                 </StatusBadge>
                 <small className={isOver ? "budget-over" : ""}>
                   {isOver
-                    ? `${formatMoney(Math.abs(item.remaining_base_minor), value.base_currency)} over`
-                    : `${formatMoney(item.remaining_base_minor, value.base_currency)} remaining`}
+                    ? t("{amount} over", { amount: formatMoney(Math.abs(item.remaining_base_minor), value.base_currency) })
+                    : t("{amount} remaining", { amount: formatMoney(item.remaining_base_minor, value.base_currency) })}
                 </small>
               </div>
             </article>
@@ -382,16 +394,20 @@ function budgetCategoryOptions(
   saved: MonthlyBudget | undefined,
 ) {
   const options = active.map((category) => ({
-    id: category.id, label: `${category.icon ? `${category.icon} ` : ""}${category.name}`,
+    id: category.id, label: categoryName(category),
   }));
   const retained = saved?.items.find((item) => item.category_id === draft.categoryId);
   if (retained && !options.some((option) => option.id === retained.category_id)) {
     options.push({
       id: retained.category_id,
-      label: `${retained.category_icon ? `${retained.category_icon} ` : ""}${retained.category_name} (archived)`,
+      label: `${categoryName({ name: retained.category_name, predefined_key: retained.category_predefined_key })} (${t("Archived")})`,
     });
   }
   return options.sort((left, right) => left.label.localeCompare(right.label));
+}
+
+function categoryAppearance(category: Category) {
+  return { colorKey: category.color_key, iconType: category.icon_type, iconValue: category.icon_value ?? category.icon, name: categoryName(category) };
 }
 
 function hasBranchOverlap(selected: Set<string>, categories: Category[]): boolean {

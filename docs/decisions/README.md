@@ -100,6 +100,8 @@ Keep ADRs concise. They are not implementation plans.
 - [ADR 0009: Protect Workspace Collaboration and
   Ownership](0009-protect-workspace-collaboration-and-ownership.md)
 - [ADR 0010: Deliver Invitations Over SMTP](0010-deliver-invitations-over-smtp.md)
+- [ADR 0011: Analyze Posted Spending Over
+  Time](0011-analyze-posted-spending-over-time.md)
 
 ## Initial Accepted Decisions
 

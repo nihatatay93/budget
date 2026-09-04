@@ -34,25 +34,32 @@ func (k Kind) Valid() bool {
 }
 
 type Category struct {
-	ID          string
-	WorkspaceID string
-	ParentID    *string
-	Name        string
-	Kind        Kind
-	SystemKey   *string
-	Icon        *string
-	ArchivedAt  *time.Time
+	ID            string
+	WorkspaceID   string
+	ParentID      *string
+	Name          string
+	Kind          Kind
+	SystemKey     *string
+	PredefinedKey *string
+	Appearance    Appearance
+	Icon          *string
+	ArchivedAt    *time.Time
 }
 
 type WriteInput struct {
-	Name     string
-	Kind     Kind
-	ParentID *string
-	Icon     *string
+	Name       string
+	Kind       Kind
+	ParentID   *string
+	Icon       *string
+	IconType   *string
+	IconValue  *string
+	ColorKey   *string
+	Appearance Appearance
 }
 
 type Repository interface {
 	List(context.Context, string, bool) ([]Category, error)
+	EnsurePredefined(context.Context, string) error
 	Get(context.Context, string, string) (Category, error)
 	Create(context.Context, Category) (Category, error)
 	Update(context.Context, string, string, WriteInput) (Category, error)
@@ -60,6 +67,68 @@ type Repository interface {
 	HasChildren(context.Context, string, string) (bool, error)
 	HasAnyChildren(context.Context, string, string) (bool, error)
 	HasAllocations(context.Context, string, string) (bool, error)
+}
+
+// PredefinedCategory is workspace-owned metadata for a built-in reporting category. Its
+// key and appearance use stable semantic values; clients resolve its localized display name.
+//
+// A predefined category with an empty ParentKey is a group: the heading a client renders its
+// members under, and an ordinary category in every other respect, so a workspace can rename,
+// recolour, or spend directly against it. Members carry their group's colour on purpose — a
+// section reads as one band of colour, and a composition chart ranks the groups rather than
+// two dozen equally weighted categories.
+type PredefinedCategory struct {
+	Key        string
+	Kind       Kind
+	ParentKey  string
+	Appearance Appearance
+}
+
+// Groups precede their members, because seeding resolves a member's parent by looking its
+// group up in the same workspace. PredefinedCategoriesAreOrdered guards that in a test.
+var predefinedCategories = []PredefinedCategory{
+	{Key: "group_food", Kind: KindExpense, Appearance: systemAppearance("utensils", "blue")},
+	{Key: "groceries", Kind: KindExpense, ParentKey: "group_food", Appearance: systemAppearance("shopping-cart", "blue")},
+	{Key: "dining", Kind: KindExpense, ParentKey: "group_food", Appearance: systemAppearance("utensils", "blue")},
+
+	{Key: "group_home", Kind: KindExpense, Appearance: systemAppearance("home", "orange")},
+	{Key: "housing", Kind: KindExpense, ParentKey: "group_home", Appearance: systemAppearance("home", "orange")},
+	{Key: "utilities", Kind: KindExpense, ParentKey: "group_home", Appearance: systemAppearance("receipt", "orange")},
+
+	// Transportation and Entertainment already named these ideas, so no group is invented to
+	// sit above them. A group that only restates its member adds a level without adding
+	// meaning — and in Turkish the two rendered identically, as Ulaşım above Ulaşım.
+	{Key: "transportation", Kind: KindExpense, Appearance: systemAppearance("car", "purple")},
+
+	{Key: "entertainment", Kind: KindExpense, Appearance: systemAppearance("gamepad", "pink")},
+	{Key: "subscriptions", Kind: KindExpense, ParentKey: "entertainment", Appearance: systemAppearance("repeat", "pink")},
+	{Key: "travel", Kind: KindExpense, ParentKey: "entertainment", Appearance: systemAppearance("plane", "pink")},
+
+	{Key: "group_lifestyle", Kind: KindExpense, Appearance: systemAppearance("heart", "red")},
+	{Key: "health", Kind: KindExpense, ParentKey: "group_lifestyle", Appearance: systemAppearance("heart", "red")},
+	{Key: "personal_care", Kind: KindExpense, ParentKey: "group_lifestyle", Appearance: systemAppearance("sparkles", "red")},
+	{Key: "shopping", Kind: KindExpense, ParentKey: "group_lifestyle", Appearance: systemAppearance("shopping-bag", "red")},
+	{Key: "gifts", Kind: KindExpense, ParentKey: "group_lifestyle", Appearance: systemAppearance("gift", "red")},
+	{Key: "education", Kind: KindExpense, ParentKey: "group_lifestyle", Appearance: systemAppearance("graduation-cap", "red")},
+
+	{Key: "other", Kind: KindExpense, Appearance: systemAppearance("ellipsis", "slate")},
+
+	{Key: "group_income", Kind: KindIncome, Appearance: systemAppearance("wallet", "green")},
+	{Key: "salary", Kind: KindIncome, ParentKey: "group_income", Appearance: systemAppearance("wallet", "green")},
+	{Key: "freelance", Kind: KindIncome, ParentKey: "group_income", Appearance: systemAppearance("laptop", "green")},
+	{Key: "investment", Kind: KindIncome, ParentKey: "group_income", Appearance: systemAppearance("trending-up", "green")},
+	{Key: "rental_income", Kind: KindIncome, ParentKey: "group_income", Appearance: systemAppearance("building", "green")},
+	{Key: "gift_income", Kind: KindIncome, ParentKey: "group_income", Appearance: systemAppearance("gift", "green")},
+	{Key: "refund", Kind: KindIncome, ParentKey: "group_income", Appearance: systemAppearance("refund", "green")},
+	{Key: "other_income", Kind: KindIncome, ParentKey: "group_income", Appearance: systemAppearance("wallet-more", "green")},
+}
+
+func systemAppearance(icon, color string) Appearance {
+	return Appearance{IconType: IconTypeSystem, IconValue: icon, ColorKey: color}
+}
+
+func PredefinedCategories() []PredefinedCategory {
+	return append([]PredefinedCategory(nil), predefinedCategories...)
 }
 
 // maxHierarchyDepth bounds ancestor traversal so unexpected stored data cannot loop forever.
@@ -83,6 +152,9 @@ func (s *Service) List(
 		return nil, ErrInvalidInput
 	}
 	if err := s.access.RequireRead(ctx, workspaceID, userID); err != nil {
+		return nil, err
+	}
+	if err := s.repository.EnsurePredefined(ctx, workspaceID); err != nil {
 		return nil, err
 	}
 	return s.repository.List(ctx, workspaceID, includeArchived)
@@ -119,7 +191,7 @@ func (s *Service) Create(
 	}
 	return s.repository.Create(ctx, Category{
 		ID: id.String(), WorkspaceID: workspaceID, ParentID: input.ParentID,
-		Name: input.Name, Kind: input.Kind, Icon: input.Icon,
+		Name: input.Name, Kind: input.Kind, Appearance: input.Appearance, Icon: &input.Appearance.IconValue,
 	})
 }
 
@@ -141,6 +213,14 @@ func (s *Service) Update(
 	}
 	if current.SystemKey != nil {
 		return Category{}, ErrProtected
+	}
+	if current.PredefinedKey != nil {
+		// Built-in categories have localized client-side names and a fixed reporting kind.
+		// A workspace may personalize their appearance, but must not alter that identity.
+		input.Name = current.Name
+		input.Kind = current.Kind
+		input.ParentID = current.ParentID
+		return s.repository.Update(ctx, workspaceID, categoryID, input)
 	}
 	if err := s.validateParent(ctx, workspaceID, categoryID, input); err != nil {
 		return Category{}, err
@@ -236,13 +316,12 @@ func normalizeWriteInput(input WriteInput) (WriteInput, error) {
 	if input.Name == "" || utf8.RuneCountInString(input.Name) > 100 || !input.Kind.Valid() {
 		return WriteInput{}, ErrInvalidInput
 	}
-	if input.Icon != nil {
-		icon := strings.TrimSpace(*input.Icon)
-		if icon == "" || utf8.RuneCountInString(icon) > 64 {
-			return WriteInput{}, ErrInvalidInput
-		}
-		input.Icon = &icon
+	appearance, err := normalizeAppearance(input.IconType, input.IconValue, input.ColorKey, input.Icon)
+	if err != nil {
+		return WriteInput{}, err
 	}
+	input.Appearance = appearance
+	input.Icon = &appearance.IconValue
 	return input, nil
 }
 

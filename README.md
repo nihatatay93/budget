@@ -17,6 +17,8 @@ _Representative workspace data._
 - Organize money with multi-currency accounts and hierarchical income or expense categories.
 - Plan monthly category budgets and compare them with posted allocation activity.
 - Explore account and category reports for a selected period.
+- Analyze posted spending over time: trends, category composition, weekday and daily rhythm,
+  top payees, and period-over-period movement.
 - Share a workspace through invitations and owner, editor, or viewer roles.
 - Move between Overview, Transactions, Budget, Accounts, and More from compact web and iOS
   navigation; the wider web layout keeps reporting and management destinations visible.

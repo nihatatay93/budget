@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { components } from "../api/generated/schema";
+import { analysisGranularities, granularityLabel } from "./analysis";
 import { SUPPORTED_CURRENCIES, currencyLabel } from "./currency";
 import { ASSIGNABLE_ROLES, INVITATION_ROLES, canInvite } from "./workspace";
 
@@ -16,6 +17,7 @@ import { ASSIGNABLE_ROLES, INVITATION_ROLES, canInvite } from "./workspace";
 type ContractCurrency = components["schemas"]["Currency"];
 type ContractRole = components["schemas"]["WorkspaceRole"];
 type ContractInvitationRole = components["schemas"]["WorkspaceInvitationRole"];
+type ContractGranularity = components["schemas"]["AnalysisGranularity"];
 
 describe("contract mirrors", () => {
   it("covers every contract currency with a label", () => {
@@ -33,6 +35,15 @@ describe("contract mirrors", () => {
       owner: true, admin: true, member: true, viewer: true,
     };
     expect([...ASSIGNABLE_ROLES].sort()).toEqual(Object.keys(contract).sort());
+  });
+
+  it("offers every analysis granularity the contract accepts, and no other", () => {
+    const contract: Record<ContractGranularity, true> = { day: true, week: true, month: true };
+    expect([...analysisGranularities].sort()).toEqual(Object.keys(contract).sort());
+    for (const granularity of analysisGranularities) {
+      // A missing label would render a bucket control with the raw contract value on it.
+      expect(granularityLabel(granularity)).not.toBe(`analysis.granularity.${granularity}`);
+    }
   });
 
   it("mirrors invitation roles and excludes owner", () => {

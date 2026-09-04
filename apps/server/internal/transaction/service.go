@@ -77,8 +77,11 @@ type EntryInput struct {
 }
 
 type AllocationInput struct {
-	CategoryID      string
-	AmountBaseMinor int64
+	CategoryID string
+	// AmountBaseMinor may be nil on a lone allocation, which then takes the transaction's
+	// total entry base amount. See the allocation reconciliation rules in
+	// docs/domain-model.md.
+	AmountBaseMinor *int64
 }
 
 type WriteInput struct {
@@ -285,8 +288,12 @@ func (s *Service) prepare(
 		return Transaction{}, ErrInvalidInput
 	}
 	for _, candidate := range input.Allocations {
-		if !validUUID(candidate.CategoryID) || candidate.AmountBaseMinor == 0 {
+		if !validUUID(candidate.CategoryID) {
 			return Transaction{}, ErrInvalidInput
+		}
+		amount, err := s.allocationAmount(candidate.AmountBaseMinor, entryAmounts, len(input.Allocations))
+		if err != nil {
+			return Transaction{}, err
 		}
 		exists, err := s.repository.CategoryExists(ctx, workspaceID, candidate.CategoryID)
 		if err != nil {
@@ -295,7 +302,7 @@ func (s *Service) prepare(
 		if !exists {
 			return Transaction{}, ErrReferenceInvalid
 		}
-		allocation, err := newAllocation(candidate.CategoryID, candidate.AmountBaseMinor)
+		allocation, err := newAllocation(candidate.CategoryID, amount)
 		if err != nil {
 			return Transaction{}, err
 		}
@@ -328,6 +335,28 @@ func (s *Service) prepare(
 		return Transaction{}, err
 	}
 	return result, nil
+}
+
+// allocationAmount resolves a stated amount, or derives the only allocation's amount from the
+// entries. Choosing a category must not oblige a client to restate a figure the server has just
+// computed — for a foreign-currency account, the value booked at the transaction date's rate,
+// which the client has no way to know. A split states every amount, because dividing a
+// transaction between categories is the client's decision and cannot be derived.
+func (s *Service) allocationAmount(explicit *int64, entryAmounts []int64, allocations int) (int64, error) {
+	if explicit != nil {
+		if *explicit == 0 {
+			return 0, ErrInvalidInput
+		}
+		return *explicit, nil
+	}
+	if allocations != 1 {
+		return 0, ErrInvalidInput
+	}
+	total, ok := sum(entryAmounts)
+	if !ok || total == 0 {
+		return 0, ErrDoesNotReconcile
+	}
+	return total, nil
 }
 
 func (s *Service) bookBaseAmount(

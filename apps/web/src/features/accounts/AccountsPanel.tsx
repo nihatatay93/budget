@@ -11,6 +11,7 @@ import {
   createAccount,
   exchangeRatesQueryKey,
   financialProjectionQueryPrefix,
+  spendingAnalysisQueryPrefix,
   listAccounts,
   listExchangeRates,
   updateAccount,
@@ -34,6 +35,7 @@ import {
   currencyLabel,
   formatMoney,
 } from "../../lib/currency";
+import { t } from "../../lib/i18n";
 
 type Workspace = SessionResponse["workspaces"][number];
 
@@ -64,13 +66,14 @@ export function AccountsPanel({ workspace, canManage }: { workspace: Workspace; 
     onSuccess: async (account) => {
       setToasts([{
         id: `account-${account.id}-saved`,
-        title: editing ? "Account updated" : "Account created",
+        title: editing ? t("Account updated") : t("Account created"),
         tone: "positive",
       }]);
       reset();
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: accountsQueryKey(workspace.id) }),
         queryClient.invalidateQueries({ queryKey: financialProjectionQueryPrefix(workspace.id) }),
+        queryClient.invalidateQueries({ queryKey: spendingAnalysisQueryPrefix(workspace.id) }),
       ]);
     },
   });
@@ -79,14 +82,15 @@ export function AccountsPanel({ workspace, canManage }: { workspace: Workspace; 
     onSuccess: async () => {
       setToasts([{
         id: `account-archive-${archiving?.id ?? "complete"}`,
-        title: "Account archived",
-        description: "Its historical entries remain part of the ledger.",
+        title: t("Account archived"),
+        description: t("Its historical entries remain part of the ledger."),
         tone: "positive",
       }]);
       setArchiving(undefined);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: accountsQueryKey(workspace.id) }),
         queryClient.invalidateQueries({ queryKey: financialProjectionQueryPrefix(workspace.id) }),
+        queryClient.invalidateQueries({ queryKey: spendingAnalysisQueryPrefix(workspace.id) }),
       ]);
     },
   });
@@ -138,17 +142,17 @@ export function AccountsPanel({ workspace, canManage }: { workspace: Workspace; 
     <section className="accounts-workspace" aria-labelledby="accounts-heading">
       <div className="resource-destination-heading">
         <div>
-          <p className="eyebrow">Where money lives</p>
-          <h2 id="accounts-heading">Accounts</h2>
-          <p>Balances come from posted entries; pending activity is reflected in projections.</p>
+          <p className="eyebrow">{t("Where money lives")}</p>
+          <h2 id="accounts-heading">{t("Accounts")}</h2>
+          <p>{t("Balances come from posted entries; pending activity is reflected in projections.")}</p>
         </div>
-        {canManage ? <button onClick={create} type="button">Add account</button> : null}
+        {canManage ? <button onClick={create} type="button">{t("Add account")}</button> : null}
       </div>
-      {query.isPending ? <LoadingState label="Loading accounts" rows={4} /> : null}
+      {query.isPending ? <LoadingState label={t("Loading accounts")} rows={4} /> : null}
       {query.isError ? (
         <InlineNotice
-          action={<button className="secondary-button" onClick={() => void query.refetch()} type="button">Try again</button>}
-          title="Accounts could not be loaded"
+          action={<button className="secondary-button" onClick={() => void query.refetch()} type="button">{t("Try again")}</button>}
+          title={t("Accounts could not be loaded")}
           tone="danger"
         >
           <p>{query.error.message}</p>
@@ -163,10 +167,10 @@ export function AccountsPanel({ workspace, canManage }: { workspace: Workspace; 
       />
       {!query.isPending && !query.isError && activeAccounts.length === 0 ? (
         <EmptyState
-          action={canManage ? <button onClick={create} type="button">Create first account</button> : undefined}
-          description="Accounts are required before transactions can affect a balance."
+          action={canManage ? <button onClick={create} type="button">{t("Create first account")}</button> : undefined}
+          description={t("Accounts are required before transactions can affect a balance.")}
           icon="accounts"
-          title="No active accounts"
+          title={t("No active accounts")}
         />
       ) : null}
       {activeAccounts.length > 0 ? (
@@ -178,7 +182,10 @@ export function AccountsPanel({ workspace, canManage }: { workspace: Workspace; 
       ) : null}
       {archivedAccounts.length > 0 ? (
         <details className="archived-resource-group">
-          <summary>{archivedAccounts.length} archived account{archivedAccounts.length === 1 ? "" : "s"}</summary>
+          <summary>{t(
+            archivedAccounts.length === 1 ? "{count} archived account" : "{count} archived accounts",
+            { count: archivedAccounts.length },
+          )}</summary>
           <div className="account-card-grid account-card-grid-archived">
             {archivedAccounts.map((account) => (
               <AccountCard account={account} canManage={false} key={account.id} onArchive={confirmArchive} onEdit={edit} />
@@ -187,43 +194,38 @@ export function AccountsPanel({ workspace, canManage }: { workspace: Workspace; 
         </details>
       ) : null}
       {!canManage && !query.isPending ? (
-        <InlineNotice title="Read-only accounts"><p>Viewer access can review balances but cannot change account settings.</p></InlineNotice>
+        <InlineNotice title={t("Read-only accounts")}><p>{t("Viewer access can review balances but cannot change account settings.")}</p></InlineNotice>
       ) : null}
       {canManage ? (
         <ModalDialog
-          description="Account currency is locked after ledger history exists. Balances are always derived from entries."
+          description={t("Account currency is locked after ledger history exists. Balances are always derived from entries.")}
           footer={(
             <>
-              <button className="secondary-button" onClick={reset} type="button">Cancel</button>
+              <button className="secondary-button" onClick={reset} type="button">{t("Cancel")}</button>
               <button disabled={save.isPending} form="account-editor" type="submit">
-                {save.isPending ? "Saving…" : editing ? "Save account" : "Add account"}
+                {save.isPending ? t("Saving…") : editing ? t("Save account") : t("Add account")}
               </button>
             </>
           )}
           onClose={reset}
           open={editorOpen}
           placement="drawer"
-          title={editing ? `Edit ${editing.name}` : "Add account"}
+          title={editing ? t("Edit {name}", { name: editing.name }) : t("Add account")}
         >
           <form className="resource-form resource-editor-form" id="account-editor" onSubmit={submit}>
           <label>
-            Name
+            {t("Name")}
             <input required maxLength={100} value={name} onChange={(event) => setName(event.target.value)} />
           </label>
           <div className="form-columns">
             <label>
-              Type
+              {t("Type")}
               <select value={type} onChange={(event) => setType(event.target.value as typeof type)}>
-                <option value="bank">Bank</option>
-                <option value="cash">Cash</option>
-                <option value="credit_card">Credit card</option>
-                <option value="savings">Savings</option>
-                <option value="investment">Investment</option>
-                <option value="other">Other</option>
+                {(["bank", "cash", "credit_card", "savings", "investment", "other"] as const).map((accountType) => <option key={accountType} value={accountType}>{t(`account.type.${accountType}`)}</option>)}
               </select>
             </label>
             <label>
-              Currency
+              {t("Currency")}
               <select
                 required
                 value={currency}
@@ -238,7 +240,7 @@ export function AccountsPanel({ workspace, canManage }: { workspace: Workspace; 
             </label>
           </div>
           <label>
-            Institution (optional)
+            {t("Institution (optional)")}
             <input maxLength={100} value={institutionName} onChange={(event) => setInstitutionName(event.target.value)} />
           </label>
           <MutationError mutation={save} />
@@ -246,26 +248,26 @@ export function AccountsPanel({ workspace, canManage }: { workspace: Workspace; 
         </ModalDialog>
       ) : null}
       <ModalDialog
-        description="Archiving removes this account from active workflows while preserving every historical entry and report."
+        description={t("Archiving removes this account from active workflows while preserving every historical entry and report.")}
         footer={(
           <>
-            <button className="secondary-button" onClick={() => setArchiving(undefined)} type="button">Cancel</button>
+            <button className="secondary-button" onClick={() => setArchiving(undefined)} type="button">{t("Cancel")}</button>
             <button
               className="danger-button"
               disabled={archive.isPending}
               onClick={() => archiving && archive.mutate(archiving.id)}
               type="button"
             >
-              {archive.isPending ? "Archiving…" : "Archive account"}
+              {archive.isPending ? t("Archiving…") : t("Archive account")}
             </button>
           </>
         )}
         onClose={() => setArchiving(undefined)}
         open={Boolean(archiving)}
-        title={`Archive ${archiving?.name ?? "account"}?`}
+        title={t("Archive {name}?", { name: archiving?.name ?? t("account") })}
       >
-        <InlineNotice title="Historical balances stay intact" tone="warning">
-          <p>You can no longer select the archived account for new transactions.</p>
+        <InlineNotice title={t("Historical balances stay intact")} tone="warning">
+          <p>{t("You can no longer select the archived account for new transactions.")}</p>
         </InlineNotice>
         <MutationError mutation={archive} />
       </ModalDialog>
@@ -286,20 +288,20 @@ function AccountCard({ account, canManage, onArchive, onEdit }: {
         <span aria-hidden="true" className="resource-icon"><AppIcon name="accounts" size={18} /></span>
         <div>
           <strong>{account.name}</strong>
-          <small>{account.institution_name || account.type.replaceAll("_", " ")}</small>
+          <small>{account.institution_name || t(`account.type.${account.type}`)}</small>
         </div>
         <StatusBadge>{account.currency}</StatusBadge>
       </div>
       <div className="account-card-balance">
-        <span>{account.archived_at ? "Historical balance" : "Posted balance"}</span>
+        <span>{account.archived_at ? t("Historical balance") : t("Posted balance")}</span>
         <strong><MoneyAmount amount={account.balance_minor} currency={account.currency} emphasis="hero" /></strong>
       </div>
       <div className="account-card-footer">
-        <span>{account.type.replaceAll("_", " ")}</span>
+        <span>{t(`account.type.${account.type}`)}</span>
         {canManage ? (
           <div>
-            <button className="text-button" onClick={() => onEdit(account)} type="button">Edit</button>
-            <button className="text-button danger" onClick={() => onArchive(account)} type="button">Archive</button>
+            <button className="text-button" onClick={() => onEdit(account)} type="button">{t("Edit")}</button>
+            <button className="text-button danger" onClick={() => onArchive(account)} type="button">{t("Archive")}</button>
           </div>
         ) : null}
       </div>
@@ -336,24 +338,22 @@ function BaseCurrencyTotal({
   return (
     <div className="currency-total">
       <div>
-        <span>Base-currency total</span>
+        <span>{t("Base-currency total")}</span>
         <strong>{formatMoney(total, baseCurrency)}</strong>
         {converted !== null && selected ? (
           <small>
-            ≈ {formatMoney(converted, displayCurrency)} at the rate published{" "}
-            {selected.rate_date}
+            {t("≈ {amount} at the rate published {date}", { amount: formatMoney(converted, displayCurrency), date: selected.rate_date })}
           </small>
         ) : null}
         {excluded > 0 ? (
           <small>
-            {excluded} account{excluded === 1 ? "" : "s"} in another currency{" "}
-            {excluded === 1 ? "is" : "are"} not included in this total.
+            {t("{count} account(s) in another currency are not included in this total.", { count: excluded })}
           </small>
         ) : null}
       </div>
       {rates.length > 0 ? (
         <label>
-          Show in
+          {t("Show in")}
           <select
             value={displayCurrency}
             onChange={(event) => onDisplayCurrencyChange(event.target.value as Currency)}

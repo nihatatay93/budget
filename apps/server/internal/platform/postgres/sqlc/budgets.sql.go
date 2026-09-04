@@ -198,7 +198,11 @@ SELECT
     budget_items.id,
     budget_items.category_id,
     categories.name AS category_name,
+    categories.predefined_key AS category_predefined_key,
     categories.icon AS category_icon,
+    categories.icon_type AS category_icon_type,
+    categories.icon_value AS category_icon_value,
+    categories.color_key AS category_color_key,
     categories.archived_at AS category_archived_at,
     budget_items.amount_base_minor AS planned_base_minor,
     item_usage.signed_allocation_base_minor
@@ -222,7 +226,11 @@ type ListMonthlyBudgetItemsRow struct {
 	ID                        pgtype.UUID        `json:"id"`
 	CategoryID                pgtype.UUID        `json:"category_id"`
 	CategoryName              string             `json:"category_name"`
+	CategoryPredefinedKey     pgtype.Text        `json:"category_predefined_key"`
 	CategoryIcon              pgtype.Text        `json:"category_icon"`
+	CategoryIconType          string             `json:"category_icon_type"`
+	CategoryIconValue         string             `json:"category_icon_value"`
+	CategoryColorKey          string             `json:"category_color_key"`
 	CategoryArchivedAt        pgtype.Timestamptz `json:"category_archived_at"`
 	PlannedBaseMinor          int64              `json:"planned_base_minor"`
 	SignedAllocationBaseMinor int64              `json:"signed_allocation_base_minor"`
@@ -241,7 +249,11 @@ func (q *Queries) ListMonthlyBudgetItems(ctx context.Context, arg ListMonthlyBud
 			&i.ID,
 			&i.CategoryID,
 			&i.CategoryName,
+			&i.CategoryPredefinedKey,
 			&i.CategoryIcon,
+			&i.CategoryIconType,
+			&i.CategoryIconValue,
+			&i.CategoryColorKey,
 			&i.CategoryArchivedAt,
 			&i.PlannedBaseMinor,
 			&i.SignedAllocationBaseMinor,

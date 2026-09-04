@@ -115,6 +115,26 @@ func TestCreateTransactionPassesCompleteAggregate(t *testing.T) {
 	}
 }
 
+// An allocation without an amount must reach the domain as an absent value rather than a zero,
+// which is what lets the service derive it from the entries.
+func TestCreateTransactionForwardsAllocationWithoutAnAmount(t *testing.T) {
+	service := &fakeTransactionService{}
+	response := performJSON(
+		t, transactionTestRouter(t, service), http.MethodPost,
+		"/v1/workspaces/"+testWorkspaceID+"/transactions",
+		`{"kind":"standard","status":"posted","transaction_date":"2026-08-18","entries":[{"account_id":"`+testAccountID+`","amount_minor":-1250}],"allocations":[{"category_id":"`+testCategoryID+`"}]}`,
+		map[string]string{"Authorization": "Bearer raw-token"},
+	)
+	if response.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusCreated, response.Body.String())
+	}
+	if len(service.createInput.Allocations) != 1 ||
+		service.createInput.Allocations[0].CategoryID != testCategoryID ||
+		service.createInput.Allocations[0].AmountBaseMinor != nil {
+		t.Fatalf("Create() allocations = %#v", service.createInput.Allocations)
+	}
+}
+
 func TestCreateTransactionMapsDomainConflictsAndRateFailure(t *testing.T) {
 	tests := []struct {
 		name       string

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nihatatay93/budget/internal/auth"
 )
@@ -53,7 +54,7 @@ func TestRegisterCookieSessionDoesNotExposeToken(t *testing.T) {
 		t.Fatalf("status = %d, want %d: %s", response.Code, http.StatusCreated, response.Body.String())
 	}
 	setCookie := response.Header().Get("Set-Cookie")
-	for _, attribute := range []string{"budget_session=raw-token", "Path=/", "HttpOnly", "Secure", "SameSite=Lax"} {
+	for _, attribute := range []string{"budget_session=raw-token", "Path=/", "HttpOnly", "Secure", "SameSite=Lax", "Max-Age="} {
 		if !strings.Contains(setCookie, attribute) {
 			t.Errorf("Set-Cookie %q does not contain %q", setCookie, attribute)
 		}
@@ -63,6 +64,43 @@ func TestRegisterCookieSessionDoesNotExposeToken(t *testing.T) {
 	}
 	if response.Header().Get("Cache-Control") != "no-store" {
 		t.Fatalf("Cache-Control = %q, want no-store", response.Header().Get("Cache-Control"))
+	}
+}
+
+// The cookie and the session it names must expire together. A cookie without Max-Age is
+// discarded when the browser closes, which silently shortened every web session to the life
+// of a window regardless of the lifetime the operator configured.
+func TestSessionCookieCarriesTheConfiguredSessionLifetime(t *testing.T) {
+	options := testOptions()
+	options.SessionTTL = 72 * time.Hour
+	services := testServices()
+	services.Authentication = &fakeAuthService{
+		registerResult: testAuthResult(auth.TransportCookie),
+	}
+	router, err := NewRouter(services, options)
+	if err != nil {
+		t.Fatalf("NewRouter() error = %v", err)
+	}
+
+	response := performJSON(
+		t, router, http.MethodPost, "/v1/auth/register", registerJSON("cookie"),
+		map[string]string{"Origin": options.PublicOrigin},
+	)
+	if response.Code != http.StatusCreated {
+		t.Fatalf("status = %d: %s", response.Code, response.Body.String())
+	}
+
+	var session *http.Cookie
+	for _, cookie := range (&http.Response{Header: response.Header()}).Cookies() {
+		if cookie.Name == sessionCookieName {
+			session = cookie
+		}
+	}
+	if session == nil {
+		t.Fatal("no session cookie was set")
+	}
+	if want := int((72 * time.Hour).Seconds()); session.MaxAge != want {
+		t.Fatalf("Max-Age = %d, want %d", session.MaxAge, want)
 	}
 }
 

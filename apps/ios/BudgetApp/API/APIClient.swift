@@ -44,12 +44,10 @@ enum BudgetCurrency: String, CaseIterable, Identifiable, Sendable {
 
     var id: Self { self }
 
+    /// The ISO code stays verbatim; only the currency's name is translated, so the code a
+    /// person recognizes reads the same in every language.
     var title: String {
-        switch self {
-        case .turkishLira: "TRY · Turkish lira"
-        case .usDollar: "USD · US dollar"
-        case .euro: "EUR · Euro"
-        }
+        "\(rawValue) · \(L10n.text("currency.\(rawValue.lowercased())"))"
     }
 
     func formatted(minorUnits: Int64) -> String {
@@ -67,16 +65,7 @@ enum BudgetAccountType: String, CaseIterable, Identifiable, Sendable {
 
     var id: Self { self }
 
-    var title: String {
-        switch self {
-        case .bank: "Bank"
-        case .cash: "Cash"
-        case .creditCard: "Credit card"
-        case .savings: "Savings"
-        case .investment: "Investment"
-        case .other: "Other"
-        }
-    }
+    var title: String { L10n.text("account.type.\(rawValue)") }
 }
 
 struct BudgetAccount: Identifiable, Sendable {
@@ -119,7 +108,7 @@ enum BudgetCategoryKind: String, CaseIterable, Identifiable, Sendable {
     case income
 
     var id: Self { self }
-    var title: String { rawValue.capitalized }
+    var title: String { L10n.text("category.kind.\(rawValue)") }
 }
 
 struct BudgetCategory: Identifiable, Sendable {
@@ -129,15 +118,23 @@ struct BudgetCategory: Identifiable, Sendable {
     let name: String
     let kind: BudgetCategoryKind
     let isSystem: Bool
-    let icon: String?
+    let systemKey: String?
+    let predefinedKey: String?
+    let iconType: String
+    let iconValue: String
+    let colorKey: String
     let archivedAt: Date?
+
+    var icon: String? { iconValue }
 }
 
 struct CategoryInput: Sendable {
     let name: String
     let kind: BudgetCategoryKind
     let parentID: String?
-    let icon: String?
+    let iconType: BudgetCategoryIconType
+    let iconValue: String?
+    let colorKey: BudgetCategoryColorKey
 }
 
 enum BudgetTransactionKind: String, CaseIterable, Identifiable, Sendable {
@@ -146,13 +143,7 @@ enum BudgetTransactionKind: String, CaseIterable, Identifiable, Sendable {
     case adjustment
 
     var id: Self { self }
-    var title: String {
-        switch self {
-        case .standard: "Expense or income"
-        case .transfer: "Transfer"
-        case .adjustment: "Balance adjustment"
-        }
-    }
+    var title: String { L10n.text("transaction.kind.\(rawValue)") }
 }
 
 enum BudgetTransactionStatus: String, CaseIterable, Identifiable, Sendable {
@@ -160,7 +151,7 @@ enum BudgetTransactionStatus: String, CaseIterable, Identifiable, Sendable {
     case posted
 
     var id: Self { self }
-    var title: String { rawValue.capitalized }
+    var title: String { L10n.text("transaction.status.\(rawValue)") }
 }
 
 struct BudgetTransactionEntry: Sendable {
@@ -196,7 +187,9 @@ struct TransactionEntryInput: Sendable {
 
 struct TransactionAllocationInput: Sendable {
     let categoryID: String
-    let amountBaseMinor: Int64
+    /// Nil on a lone allocation leaves the amount to the server, which takes the transaction's
+    /// entry total — for a foreign-currency account, the value booked at that date's rate.
+    let amountBaseMinor: Int64?
 }
 
 struct TransactionInput: Sendable {
@@ -244,10 +237,15 @@ struct BudgetProjectionCategory: Identifiable, Sendable {
     let parentID: String?
     let name: String
     let kind: BudgetCategoryKind
-    let icon: String?
+    let predefinedKey: String?
+    let iconType: String
+    let iconValue: String
+    let colorKey: String
     let archivedAt: Date?
     let directBaseMinor: BudgetProjectionAmounts
     let rolledUpBaseMinor: BudgetProjectionAmounts
+
+    var icon: String? { iconValue }
 }
 
 struct BudgetFinancialProjection: Sendable {
@@ -262,15 +260,162 @@ struct BudgetProjectionRange: Equatable, Sendable {
     let toDate: String
 }
 
+/// Spending analysis is posted-only by contract, so nothing here carries a pending figure.
+/// Spending counts up when money left the workspace, matching the projection's orientation.
+/// See docs/decisions/0011-analyze-posted-spending-over-time.md.
+enum BudgetAnalysisGranularity: String, CaseIterable, Identifiable, Sendable {
+    case day
+    case week
+    case month
+
+    var id: Self { self }
+
+    /// The adjective a control shows: "Weekly".
+    var title: String { L10n.text("analysis.granularity.\(rawValue)") }
+
+    /// The noun a sentence needs: "one week of posted activity".
+    var noun: String { L10n.text("analysis.bucket.\(rawValue)") }
+}
+
+struct BudgetAnalysisPeriod: Sendable {
+    let fromDate: String
+    let toDate: String
+    let comparisonFromDate: String
+    let comparisonToDate: String
+    let granularity: BudgetAnalysisGranularity
+    let timezone: String
+    let baseCurrency: BudgetCurrency
+}
+
+struct BudgetAnalysisTotals: Sendable {
+    let incomeBaseMinor: Int64
+    let spendingBaseMinor: Int64
+    let netBaseMinor: Int64
+    let comparisonIncomeBaseMinor: Int64
+    let comparisonSpendingBaseMinor: Int64
+    let comparisonNetBaseMinor: Int64
+    let transactionCount: Int64
+    let spendingTransactionCount: Int64
+    let largestSpendingBaseMinor: Int64
+    let spendingDayCount: Int64
+    let dayCount: Int64
+}
+
+struct BudgetAnalysisBucket: Identifiable, Sendable {
+    let startDate: String
+    let endDate: String
+    let incomeBaseMinor: Int64
+    let spendingBaseMinor: Int64
+    let netBaseMinor: Int64
+    let transactionCount: Int64
+
+    var id: String { startDate }
+}
+
+struct BudgetAnalysisCategory: Identifiable, Sendable {
+    let id: String
+    let parentID: String?
+    let name: String
+    let kind: BudgetCategoryKind
+    let systemKey: String?
+    let predefinedKey: String?
+    let iconType: String
+    let iconValue: String
+    let colorKey: String
+    let archivedAt: Date?
+    let directBaseMinor: Int64
+    let rolledUpBaseMinor: Int64
+    let comparisonDirectBaseMinor: Int64
+    let comparisonRolledUpBaseMinor: Int64
+    let transactionCount: Int64
+    let rolledUpTransactionCount: Int64
+    let largestBaseMinor: Int64
+    let firstDate: String?
+    let lastDate: String?
+}
+
+/// One category's activity inside one bucket. Points exist only where activity does, so a
+/// long window of sparse categories stays small on the wire.
+struct BudgetAnalysisCategoryPoint: Sendable {
+    let categoryID: String
+    let startDate: String
+    let baseMinor: Int64
+}
+
+struct BudgetAnalysisWeekday: Identifiable, Sendable {
+    /// ISO weekday, where 1 is Monday and 7 is Sunday.
+    let weekday: Int
+    let incomeBaseMinor: Int64
+    let spendingBaseMinor: Int64
+    let transactionCount: Int64
+
+    var id: Int { weekday }
+}
+
+struct BudgetAnalysisDay: Identifiable, Sendable {
+    let date: String
+    let incomeBaseMinor: Int64
+    let spendingBaseMinor: Int64
+    let transactionCount: Int64
+
+    var id: String { date }
+}
+
+struct BudgetAnalysisPayee: Identifiable, Sendable {
+    let payee: String
+    let spendingBaseMinor: Int64
+    let incomeBaseMinor: Int64
+    let transactionCount: Int64
+    let firstDate: String
+    let lastDate: String
+
+    var id: String { payee }
+}
+
+struct BudgetAnalysisAccount: Identifiable, Sendable {
+    let id: String
+    let name: String
+    let type: BudgetAccountType
+    let currency: BudgetCurrency
+    let archivedAt: Date?
+    let outflowBaseMinor: Int64
+    let inflowBaseMinor: Int64
+    let transactionCount: Int64
+}
+
+struct BudgetSpendingAnalysis: Sendable {
+    let period: BudgetAnalysisPeriod
+    let totals: BudgetAnalysisTotals
+    let series: [BudgetAnalysisBucket]
+    let categories: [BudgetAnalysisCategory]
+    let categorySeries: [BudgetAnalysisCategoryPoint]
+    let weekdays: [BudgetAnalysisWeekday]
+    let days: [BudgetAnalysisDay]
+    let payees: [BudgetAnalysisPayee]
+    let accounts: [BudgetAnalysisAccount]
+}
+
+/// A nil granularity asks the server to choose a bucket width that suits the window length.
+struct BudgetAnalysisRange: Equatable, Sendable {
+    let fromDate: String
+    let toDate: String
+    let granularity: BudgetAnalysisGranularity?
+}
+
 struct MonthlyBudgetItem: Identifiable, Sendable {
     let id: String
     let categoryID: String
     let categoryName: String
-    let categoryIcon: String?
+    let categoryPredefinedKey: String?
+    let categoryIconType: String
+    let categoryIconValue: String
+    let categoryColorKey: String
     let categoryArchivedAt: Date?
     let plannedBaseMinor: Int64
     let usedBaseMinor: Int64
     let remainingBaseMinor: Int64
+
+    var categoryIcon: String? { categoryIconValue }
 }
 
 struct MonthlyBudgetPlan: Identifiable, Sendable {
@@ -306,7 +451,7 @@ enum BudgetWorkspaceRoleValue: String, CaseIterable, Identifiable, Sendable {
     case viewer
 
     var id: Self { self }
-    var title: String { rawValue.capitalized }
+    var title: String { L10n.workspaceRole(rawValue) }
 }
 
 struct BudgetWorkspaceMember: Identifiable, Sendable {
@@ -360,25 +505,25 @@ enum APIClientError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidCredentials:
-            "The email or password is incorrect."
+            L10n.text("The email or password is incorrect.")
         case .invalidRequest:
-            "Please check the information and try again."
+            L10n.text("Please check the information and try again.")
         case .duplicateEmail:
-            "That email address is already registered."
+            L10n.text("That email address is already registered.")
         case .conflict:
-            "The change conflicts with existing financial data."
+            L10n.text("The change conflicts with existing financial data.")
         case .rateUnavailable:
-            "A historical exchange rate is unavailable. Enter the base-currency amount manually."
+            L10n.text("A historical exchange rate is unavailable. Enter the base-currency amount manually.")
         case .forbidden:
-            "You do not have permission to make this change."
+            L10n.text("You do not have permission to make this change.")
         case .notFound:
-            "The requested item could not be found."
+            L10n.text("The requested item could not be found.")
         case .unauthorized:
-            "Your session has expired. Please sign in again."
+            L10n.text("Your session has expired. Please sign in again.")
         case .server:
-            "The server could not complete the request."
+            L10n.text("The server could not complete the request.")
         case .unexpectedResponse:
-            "The server returned an unexpected response."
+            L10n.text("The server returned an unexpected response.")
         }
     }
 }
@@ -404,6 +549,12 @@ protocol APIClient: Sendable {
         workspaceID: String,
         range: BudgetProjectionRange?
     ) async throws -> BudgetFinancialProjection
+    func spendingAnalysis(
+        serverURL: URL,
+        token: String,
+        workspaceID: String,
+        range: BudgetAnalysisRange?
+    ) async throws -> BudgetSpendingAnalysis
     func monthlyBudget(
         serverURL: URL,
         token: String,
@@ -662,7 +813,7 @@ struct URLSessionAPIClient: APIClient {
         let response = try await GeneratedAPI.client(serverURL: serverURL, bearerToken: token)
             .createCategory(
                 path: .init(workspaceId: workspaceID),
-                body: .json(categoryRequest(input))
+                body: .json(Self.categoryRequest(input))
             )
         switch response {
         case let .created(created):
@@ -692,7 +843,7 @@ struct URLSessionAPIClient: APIClient {
         let response = try await GeneratedAPI.client(serverURL: serverURL, bearerToken: token)
             .updateCategory(
                 path: .init(workspaceId: workspaceID, categoryId: categoryID),
-                body: .json(categoryRequest(input))
+                body: .json(Self.categoryRequest(input))
             )
         switch response {
         case let .ok(ok):
@@ -772,6 +923,37 @@ struct URLSessionAPIClient: APIClient {
         switch response {
         case let .ok(ok):
             return try budgetFinancialProjection(from: ok.body.json)
+        case .badRequest:
+            throw APIClientError.invalidRequest
+        case .unauthorized:
+            throw APIClientError.unauthorized
+        case .forbidden:
+            throw APIClientError.forbidden
+        case .internalServerError:
+            throw APIClientError.server
+        case .undocumented:
+            throw APIClientError.unexpectedResponse
+        }
+    }
+
+    func spendingAnalysis(
+        serverURL: URL,
+        token: String,
+        workspaceID: String,
+        range: BudgetAnalysisRange?
+    ) async throws -> BudgetSpendingAnalysis {
+        let response = try await GeneratedAPI.client(serverURL: serverURL, bearerToken: token)
+            .getSpendingAnalysis(
+                path: .init(workspaceId: workspaceID),
+                query: .init(
+                    from_date: range?.fromDate,
+                    to_date: range?.toDate,
+                    granularity: range?.granularity.map { .init(rawValue: $0.rawValue) } ?? nil
+                )
+            )
+        switch response {
+        case let .ok(ok):
+            return try budgetSpendingAnalysis(from: ok.body.json)
         case .badRequest:
             throw APIClientError.invalidRequest
         case .unauthorized:
@@ -1233,12 +1415,15 @@ struct URLSessionAPIClient: APIClient {
         )
     }
 
-    private func categoryRequest(_ input: CategoryInput) -> Components.Schemas.CategoryWriteRequest {
+    static func categoryRequest(_ input: CategoryInput) -> Components.Schemas.CategoryWriteRequest {
         .init(
             name: input.name,
             kind: .init(rawValue: input.kind.rawValue)!,
             parent_id: input.parentID,
-            icon: input.icon
+            icon: nil,
+            icon_type: .init(rawValue: input.iconType.rawValue)!,
+            icon_value: input.iconValue,
+            color_key: .init(rawValue: input.colorKey.rawValue)!
         )
     }
 
@@ -1253,7 +1438,11 @@ struct URLSessionAPIClient: APIClient {
             name: category.name,
             kind: kind,
             isSystem: category.system_key != nil,
-            icon: category.icon,
+            systemKey: category.system_key?.value1.rawValue,
+            predefinedKey: category.predefined_key?.value1.rawValue,
+            iconType: category.icon_type.rawValue,
+            iconValue: category.icon_value,
+            colorKey: category.color_key.rawValue,
             archivedAt: category.archived_at
         )
     }
@@ -1356,10 +1545,133 @@ struct URLSessionAPIClient: APIClient {
                     parentID: category.parent_id,
                     name: category.name,
                     kind: kind,
-                    icon: category.icon,
+                    predefinedKey: category.predefined_key?.value1.rawValue,
+                    iconType: category.icon_type.rawValue,
+                    iconValue: category.icon_value,
+                    colorKey: category.color_key.rawValue,
                     archivedAt: category.archived_at,
                     directBaseMinor: projectionAmounts(category.direct_base_minor),
                     rolledUpBaseMinor: projectionAmounts(category.rolled_up_base_minor)
+                )
+            }
+        )
+    }
+
+    private func budgetSpendingAnalysis(
+        from analysis: Components.Schemas.SpendingAnalysis
+    ) throws -> BudgetSpendingAnalysis {
+        guard let baseCurrency = BudgetCurrency(rawValue: analysis.period.base_currency.rawValue),
+              let granularity = BudgetAnalysisGranularity(
+                rawValue: analysis.period.granularity.rawValue
+              ) else {
+            throw APIClientError.unexpectedResponse
+        }
+        return BudgetSpendingAnalysis(
+            period: BudgetAnalysisPeriod(
+                fromDate: analysis.period.from_date,
+                toDate: analysis.period.to_date,
+                comparisonFromDate: analysis.period.comparison_from_date,
+                comparisonToDate: analysis.period.comparison_to_date,
+                granularity: granularity,
+                timezone: analysis.period.timezone,
+                baseCurrency: baseCurrency
+            ),
+            totals: BudgetAnalysisTotals(
+                incomeBaseMinor: analysis.totals.income_base_minor,
+                spendingBaseMinor: analysis.totals.spending_base_minor,
+                netBaseMinor: analysis.totals.net_base_minor,
+                comparisonIncomeBaseMinor: analysis.totals.comparison_income_base_minor,
+                comparisonSpendingBaseMinor: analysis.totals.comparison_spending_base_minor,
+                comparisonNetBaseMinor: analysis.totals.comparison_net_base_minor,
+                transactionCount: analysis.totals.transaction_count,
+                spendingTransactionCount: analysis.totals.spending_transaction_count,
+                largestSpendingBaseMinor: analysis.totals.largest_spending_base_minor,
+                spendingDayCount: analysis.totals.spending_day_count,
+                dayCount: analysis.totals.day_count
+            ),
+            series: analysis.series.map { bucket in
+                BudgetAnalysisBucket(
+                    startDate: bucket.start_date,
+                    endDate: bucket.end_date,
+                    incomeBaseMinor: bucket.income_base_minor,
+                    spendingBaseMinor: bucket.spending_base_minor,
+                    netBaseMinor: bucket.net_base_minor,
+                    transactionCount: bucket.transaction_count
+                )
+            },
+            categories: try analysis.categories.map { category in
+                guard let kind = BudgetCategoryKind(rawValue: category.kind.rawValue) else {
+                    throw APIClientError.unexpectedResponse
+                }
+                return BudgetAnalysisCategory(
+                    id: category.id,
+                    parentID: category.parent_id,
+                    name: category.name,
+                    kind: kind,
+                    systemKey: category.system_key?.value1.rawValue,
+                    predefinedKey: category.predefined_key?.value1.rawValue,
+                    iconType: category.icon_type.rawValue,
+                    iconValue: category.icon_value,
+                    colorKey: category.color_key.rawValue,
+                    archivedAt: category.archived_at,
+                    directBaseMinor: category.direct_base_minor,
+                    rolledUpBaseMinor: category.rolled_up_base_minor,
+                    comparisonDirectBaseMinor: category.comparison_direct_base_minor,
+                    comparisonRolledUpBaseMinor: category.comparison_rolled_up_base_minor,
+                    transactionCount: category.transaction_count,
+                    rolledUpTransactionCount: category.rolled_up_transaction_count,
+                    largestBaseMinor: category.largest_base_minor,
+                    firstDate: category.first_date,
+                    lastDate: category.last_date
+                )
+            },
+            categorySeries: analysis.category_series.map { point in
+                BudgetAnalysisCategoryPoint(
+                    categoryID: point.category_id,
+                    startDate: point.start_date,
+                    baseMinor: point.base_minor
+                )
+            },
+            weekdays: analysis.weekdays.map { weekday in
+                BudgetAnalysisWeekday(
+                    weekday: weekday.weekday,
+                    incomeBaseMinor: weekday.income_base_minor,
+                    spendingBaseMinor: weekday.spending_base_minor,
+                    transactionCount: weekday.transaction_count
+                )
+            },
+            days: analysis.days.map { day in
+                BudgetAnalysisDay(
+                    date: day.date,
+                    incomeBaseMinor: day.income_base_minor,
+                    spendingBaseMinor: day.spending_base_minor,
+                    transactionCount: day.transaction_count
+                )
+            },
+            payees: analysis.payees.map { payee in
+                BudgetAnalysisPayee(
+                    payee: payee.payee,
+                    spendingBaseMinor: payee.spending_base_minor,
+                    incomeBaseMinor: payee.income_base_minor,
+                    transactionCount: payee.transaction_count,
+                    firstDate: payee.first_date,
+                    lastDate: payee.last_date
+                )
+            },
+            accounts: try analysis.accounts.map { account in
+                guard let type = BudgetAccountType(rawValue: account._type.rawValue),
+                      let currency = BudgetCurrency(rawValue: account.currency.rawValue) else {
+                    throw APIClientError.unexpectedResponse
+                }
+                return BudgetAnalysisAccount(
+                    id: account.id,
+                    name: account.name,
+                    type: type,
+                    currency: currency,
+                    archivedAt: account.archived_at,
+                    outflowBaseMinor: account.outflow_base_minor,
+                    inflowBaseMinor: account.inflow_base_minor,
+                    transactionCount: account.transaction_count
                 )
             }
         )
@@ -1396,7 +1708,10 @@ struct URLSessionAPIClient: APIClient {
                     id: $0.id,
                     categoryID: $0.category_id,
                     categoryName: $0.category_name,
-                    categoryIcon: $0.category_icon,
+                    categoryPredefinedKey: $0.category_predefined_key?.value1.rawValue,
+                    categoryIconType: $0.category_icon_type.rawValue,
+                    categoryIconValue: $0.category_icon_value,
+                    categoryColorKey: $0.category_color_key.rawValue,
                     categoryArchivedAt: $0.category_archived_at,
                     plannedBaseMinor: $0.planned_base_minor,
                     usedBaseMinor: $0.used_base_minor,

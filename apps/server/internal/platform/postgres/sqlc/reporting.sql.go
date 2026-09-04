@@ -175,7 +175,11 @@ SELECT
     categories.name,
     categories.kind,
     categories.system_key,
+    categories.predefined_key,
     categories.icon,
+    categories.icon_type,
+    categories.icon_value,
+    categories.color_key,
     categories.archived_at,
     direct_activity.direct_posted_signed_minor,
     direct_activity.direct_pending_signed_minor,
@@ -200,7 +204,11 @@ type ListReportingCategoryActivityRow struct {
 	Name                     string             `json:"name"`
 	Kind                     string             `json:"kind"`
 	SystemKey                pgtype.Text        `json:"system_key"`
+	PredefinedKey            pgtype.Text        `json:"predefined_key"`
 	Icon                     pgtype.Text        `json:"icon"`
+	IconType                 string             `json:"icon_type"`
+	IconValue                string             `json:"icon_value"`
+	ColorKey                 string             `json:"color_key"`
 	ArchivedAt               pgtype.Timestamptz `json:"archived_at"`
 	DirectPostedSignedMinor  int64              `json:"direct_posted_signed_minor"`
 	DirectPendingSignedMinor int64              `json:"direct_pending_signed_minor"`
@@ -223,7 +231,11 @@ func (q *Queries) ListReportingCategoryActivity(ctx context.Context, arg ListRep
 			&i.Name,
 			&i.Kind,
 			&i.SystemKey,
+			&i.PredefinedKey,
 			&i.Icon,
+			&i.IconType,
+			&i.IconValue,
+			&i.ColorKey,
 			&i.ArchivedAt,
 			&i.DirectPostedSignedMinor,
 			&i.DirectPendingSignedMinor,

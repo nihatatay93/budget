@@ -41,16 +41,20 @@ type BudgetItem struct {
 }
 
 type Category struct {
-	ID          pgtype.UUID        `json:"id"`
-	WorkspaceID pgtype.UUID        `json:"workspace_id"`
-	ParentID    pgtype.UUID        `json:"parent_id"`
-	Name        string             `json:"name"`
-	Kind        string             `json:"kind"`
-	SystemKey   pgtype.Text        `json:"system_key"`
-	Icon        pgtype.Text        `json:"icon"`
-	ArchivedAt  pgtype.Timestamptz `json:"archived_at"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	ID            pgtype.UUID        `json:"id"`
+	WorkspaceID   pgtype.UUID        `json:"workspace_id"`
+	ParentID      pgtype.UUID        `json:"parent_id"`
+	Name          string             `json:"name"`
+	Kind          string             `json:"kind"`
+	SystemKey     pgtype.Text        `json:"system_key"`
+	Icon          pgtype.Text        `json:"icon"`
+	ArchivedAt    pgtype.Timestamptz `json:"archived_at"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	PredefinedKey pgtype.Text        `json:"predefined_key"`
+	IconType      string             `json:"icon_type"`
+	IconValue     string             `json:"icon_value"`
+	ColorKey      string             `json:"color_key"`
 }
 
 type ExchangeRate struct {

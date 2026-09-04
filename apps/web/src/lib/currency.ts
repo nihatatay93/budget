@@ -1,19 +1,20 @@
 import type { components } from "../api/generated/schema";
+import { t } from "./i18n";
 
 export type Currency = components["schemas"]["Currency"];
 
 // Record<Currency, string> is the guard: adding a currency to the OpenAPI enum fails the
 // build here until it is given a label, so the dropdown can never silently omit one.
-const CURRENCY_LABELS: Record<Currency, string> = {
-  TRY: "Turkish lira",
-  USD: "US dollar",
-  EUR: "Euro",
+const CURRENCY_LABEL_KEYS: Record<Currency, string> = {
+  TRY: "currency.try",
+  USD: "currency.usd",
+  EUR: "currency.eur",
 };
 
-export const SUPPORTED_CURRENCIES = Object.keys(CURRENCY_LABELS) as Currency[];
+export const SUPPORTED_CURRENCIES = Object.keys(CURRENCY_LABEL_KEYS) as Currency[];
 
 export function currencyLabel(currency: Currency): string {
-  return CURRENCY_LABELS[currency];
+  return t(CURRENCY_LABEL_KEYS[currency]);
 }
 
 // Every supported currency uses two minor-unit decimal places, which is what makes this a
@@ -49,7 +50,7 @@ export function convertMinor(amountMinor: number, rate: string): number | null {
 }
 
 export function formatMoney(amountMinor: number, currency: Currency): string {
-  if (!Number.isSafeInteger(amountMinor)) return "Amount unavailable";
+  if (!Number.isSafeInteger(amountMinor)) return t("Amount unavailable");
   return new Intl.NumberFormat(undefined, {
     style: "currency",
     currency,

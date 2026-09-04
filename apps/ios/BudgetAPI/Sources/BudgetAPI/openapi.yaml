@@ -736,6 +736,47 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "500":
           $ref: "#/components/responses/InternalServerError"
+  /v1/workspaces/{workspaceId}/spending-analysis:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceID"
+    get:
+      operationId: getSpendingAnalysis
+      summary: Analyze spending and income over time
+      description: >-
+        Returns posted, allocation-derived spending and income for an inclusive window,
+        bucketed over time and broken down by category, weekday, day, payee, and account.
+        Every figure is posted-only and expressed in workspace base-currency minor units, so
+        the analysis describes settled reality rather than a forecast. Transfers carry no
+        allocations and never read as spending. Each window is accompanied by the immediately
+        preceding window of equal length so period-over-period movement is comparable. When
+        dates are omitted, the server uses the trailing twelve workspace-local months. The
+        window and the resolved bucket count are both bounded; see the query parameters.
+      security:
+        - cookieSession: []
+        - bearerSession: []
+      parameters:
+        - $ref: "#/components/parameters/RequestID"
+        - $ref: "#/components/parameters/AnalysisFromDate"
+        - $ref: "#/components/parameters/AnalysisToDate"
+        - $ref: "#/components/parameters/AnalysisGranularity"
+      responses:
+        "200":
+          description: The workspace spending analysis.
+          headers:
+            X-Request-ID:
+              $ref: "#/components/headers/RequestID"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpendingAnalysis"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
   /v1/workspaces/{workspaceId}/budgets:
     parameters:
       - $ref: "#/components/parameters/WorkspaceID"
@@ -947,7 +988,7 @@ paths:
           $ref: "#/components/responses/InternalServerError"
     put:
       operationId: updateCategory
-      summary: Replace editable category fields
+      summary: Replace editable category fields; built-in categories retain their localized identity and update appearance only
       security:
         - cookieSession: []
         - bearerSession: []
@@ -1100,6 +1141,36 @@ components:
       schema:
         type: string
         format: date
+    AnalysisFromDate:
+      name: from_date
+      in: query
+      required: false
+      description: >-
+        Inclusive analysis-window start. Must be supplied with to_date. The window may span
+        at most ten years, because the series carries one bucket per calendar step and so
+        costs what the window spans rather than what happened inside it.
+      schema:
+        type: string
+        format: date
+    AnalysisToDate:
+      name: to_date
+      in: query
+      required: false
+      description: Inclusive analysis-window end. Must be supplied with from_date.
+      schema:
+        type: string
+        format: date
+    AnalysisGranularity:
+      name: granularity
+      in: query
+      required: false
+      description: >-
+        Time-bucket width for the analysis series. Omitted means the server chooses a width
+        that suits the window length, which is always a width it will accept. A width fine
+        enough to produce more than 750 buckets over the requested window is refused, so a
+        decade cannot be requested one day at a time.
+      schema:
+        $ref: "#/components/schemas/AnalysisGranularity"
     BudgetMonthQuery:
       name: month
       in: query
@@ -1600,11 +1671,64 @@ components:
       enum:
         - expense
         - income
+    CategoryIconType:
+      type: string
+      enum:
+        - system
+        - emoji
+    CategoryColorKey:
+      type: string
+      enum:
+        - green
+        - mint
+        - blue
+        - cyan
+        - purple
+        - pink
+        - red
+        - orange
+        - amber
+        - slate
     SystemCategoryKey:
       type: string
       enum:
         - uncategorized_expense
         - uncategorized_income
+    PredefinedCategoryKey:
+      type: string
+      description: >-
+        Stable identifier for a built-in category, which clients resolve to a localized name.
+        A group_* key names a section: an ordinary category whose members carry it as their
+        parent, so budgets and reports roll up through it like any other parent.
+      enum:
+        - group_food
+        - group_home
+        - group_transport
+        - group_entertainment
+        - group_lifestyle
+        - group_misc
+        - group_income
+        - housing
+        - groceries
+        - dining
+        - transportation
+        - utilities
+        - shopping
+        - health
+        - entertainment
+        - subscriptions
+        - travel
+        - education
+        - personal_care
+        - gifts
+        - other
+        - salary
+        - freelance
+        - investment
+        - rental_income
+        - gift_income
+        - refund
+        - other_income
     CategoryWriteRequest:
       type: object
       additionalProperties: false
@@ -1625,6 +1749,16 @@ components:
           type: string
           minLength: 1
           maxLength: 64
+          deprecated: true
+          description: Legacy icon input. New clients must provide icon_type, icon_value, and color_key.
+        icon_type:
+          $ref: "#/components/schemas/CategoryIconType"
+        icon_value:
+          type: string
+          minLength: 1
+          maxLength: 64
+        color_key:
+          $ref: "#/components/schemas/CategoryColorKey"
     Category:
       type: object
       additionalProperties: false
@@ -1633,6 +1767,9 @@ components:
         - workspace_id
         - name
         - kind
+        - icon_type
+        - icon_value
+        - color_key
       properties:
         id:
           type: string
@@ -1651,8 +1788,20 @@ components:
           allOf:
             - $ref: "#/components/schemas/SystemCategoryKey"
           readOnly: true
+        predefined_key:
+          allOf:
+            - $ref: "#/components/schemas/PredefinedCategoryKey"
+          readOnly: true
         icon:
           type: string
+          deprecated: true
+          description: Legacy compatibility icon value. Use icon_type and icon_value instead.
+        icon_type:
+          $ref: "#/components/schemas/CategoryIconType"
+        icon_value:
+          type: string
+        color_key:
+          $ref: "#/components/schemas/CategoryColorKey"
         archived_at:
           type: string
           format: date-time
@@ -1785,6 +1934,9 @@ components:
         - id
         - name
         - kind
+        - icon_type
+        - icon_value
+        - color_key
         - direct_base_minor
         - rolled_up_base_minor
       properties:
@@ -1802,8 +1954,19 @@ components:
           allOf:
             - $ref: "#/components/schemas/SystemCategoryKey"
           readOnly: true
+        predefined_key:
+          allOf:
+            - $ref: "#/components/schemas/PredefinedCategoryKey"
+          readOnly: true
         icon:
           type: string
+          deprecated: true
+        icon_type:
+          $ref: "#/components/schemas/CategoryIconType"
+        icon_value:
+          type: string
+        color_key:
+          $ref: "#/components/schemas/CategoryColorKey"
         archived_at:
           type: string
           format: date-time
@@ -1832,6 +1995,372 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FinancialProjectionCategory"
+    AnalysisGranularity:
+      type: string
+      enum: [day, week, month]
+    SpendingAnalysisPeriod:
+      type: object
+      additionalProperties: false
+      required:
+        - from_date
+        - to_date
+        - comparison_from_date
+        - comparison_to_date
+        - granularity
+        - timezone
+        - base_currency
+      properties:
+        from_date:
+          type: string
+          format: date
+        to_date:
+          type: string
+          format: date
+        comparison_from_date:
+          type: string
+          format: date
+          description: Start of the equal-length window immediately preceding from_date.
+        comparison_to_date:
+          type: string
+          format: date
+          description: End of the comparison window; always the day before from_date.
+        granularity:
+          $ref: "#/components/schemas/AnalysisGranularity"
+        timezone:
+          type: string
+        base_currency:
+          $ref: "#/components/schemas/Currency"
+    SpendingAnalysisTotals:
+      type: object
+      additionalProperties: false
+      required:
+        - income_base_minor
+        - spending_base_minor
+        - net_base_minor
+        - comparison_income_base_minor
+        - comparison_spending_base_minor
+        - comparison_net_base_minor
+        - transaction_count
+        - spending_transaction_count
+        - largest_spending_base_minor
+        - spending_day_count
+        - day_count
+      properties:
+        income_base_minor:
+          type: integer
+          format: int64
+        spending_base_minor:
+          type: integer
+          format: int64
+          description: Positive when money left the workspace, matching reporting orientation.
+        net_base_minor:
+          type: integer
+          format: int64
+          description: Income minus spending.
+        comparison_income_base_minor:
+          type: integer
+          format: int64
+        comparison_spending_base_minor:
+          type: integer
+          format: int64
+        comparison_net_base_minor:
+          type: integer
+          format: int64
+        transaction_count:
+          type: integer
+          format: int64
+        spending_transaction_count:
+          type: integer
+          format: int64
+        largest_spending_base_minor:
+          type: integer
+          format: int64
+          description: Largest single posted transaction net expense in the window.
+        spending_day_count:
+          type: integer
+          format: int64
+          description: Calendar days in the window that carried posted spending.
+        day_count:
+          type: integer
+          format: int64
+          description: Inclusive length of the window in calendar days.
+    SpendingAnalysisBucket:
+      type: object
+      additionalProperties: false
+      required:
+        - start_date
+        - end_date
+        - income_base_minor
+        - spending_base_minor
+        - net_base_minor
+        - transaction_count
+      properties:
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        income_base_minor:
+          type: integer
+          format: int64
+        spending_base_minor:
+          type: integer
+          format: int64
+        net_base_minor:
+          type: integer
+          format: int64
+        transaction_count:
+          type: integer
+          format: int64
+    SpendingAnalysisCategory:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - kind
+        - icon_type
+        - icon_value
+        - color_key
+        - direct_base_minor
+        - rolled_up_base_minor
+        - comparison_direct_base_minor
+        - comparison_rolled_up_base_minor
+        - transaction_count
+        - rolled_up_transaction_count
+        - largest_base_minor
+      properties:
+        id:
+          type: string
+          format: uuid
+        parent_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        kind:
+          $ref: "#/components/schemas/CategoryKind"
+        system_key:
+          allOf:
+            - $ref: "#/components/schemas/SystemCategoryKey"
+          readOnly: true
+        predefined_key:
+          allOf:
+            - $ref: "#/components/schemas/PredefinedCategoryKey"
+          readOnly: true
+        icon_type:
+          $ref: "#/components/schemas/CategoryIconType"
+        icon_value:
+          type: string
+        color_key:
+          $ref: "#/components/schemas/CategoryColorKey"
+        archived_at:
+          type: string
+          format: date-time
+        direct_base_minor:
+          type: integer
+          format: int64
+        rolled_up_base_minor:
+          type: integer
+          format: int64
+        comparison_direct_base_minor:
+          type: integer
+          format: int64
+        comparison_rolled_up_base_minor:
+          type: integer
+          format: int64
+        transaction_count:
+          type: integer
+          format: int64
+        rolled_up_transaction_count:
+          type: integer
+          format: int64
+        largest_base_minor:
+          type: integer
+          format: int64
+          description: Largest single allocation in the window, in reporting orientation.
+        first_date:
+          type: string
+          format: date
+        last_date:
+          type: string
+          format: date
+    SpendingAnalysisCategoryPoint:
+      type: object
+      additionalProperties: false
+      required:
+        - category_id
+        - start_date
+        - base_minor
+      properties:
+        category_id:
+          type: string
+          format: uuid
+        start_date:
+          type: string
+          format: date
+          description: Bucket anchor, aligned with the series granularity.
+        base_minor:
+          type: integer
+          format: int64
+          description: Direct category activity in reporting orientation.
+    SpendingAnalysisWeekday:
+      type: object
+      additionalProperties: false
+      required:
+        - weekday
+        - income_base_minor
+        - spending_base_minor
+        - transaction_count
+      properties:
+        weekday:
+          type: integer
+          minimum: 1
+          maximum: 7
+          description: ISO weekday, where 1 is Monday and 7 is Sunday.
+        income_base_minor:
+          type: integer
+          format: int64
+        spending_base_minor:
+          type: integer
+          format: int64
+        transaction_count:
+          type: integer
+          format: int64
+    SpendingAnalysisDay:
+      type: object
+      additionalProperties: false
+      required:
+        - date
+        - income_base_minor
+        - spending_base_minor
+        - transaction_count
+      properties:
+        date:
+          type: string
+          format: date
+        income_base_minor:
+          type: integer
+          format: int64
+        spending_base_minor:
+          type: integer
+          format: int64
+        transaction_count:
+          type: integer
+          format: int64
+    SpendingAnalysisPayee:
+      type: object
+      additionalProperties: false
+      required:
+        - payee
+        - spending_base_minor
+        - income_base_minor
+        - transaction_count
+        - first_date
+        - last_date
+      properties:
+        payee:
+          type: string
+        spending_base_minor:
+          type: integer
+          format: int64
+        income_base_minor:
+          type: integer
+          format: int64
+        transaction_count:
+          type: integer
+          format: int64
+        first_date:
+          type: string
+          format: date
+        last_date:
+          type: string
+          format: date
+    SpendingAnalysisAccount:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - type
+        - currency
+        - outflow_base_minor
+        - inflow_base_minor
+        - transaction_count
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          $ref: "#/components/schemas/AccountType"
+        currency:
+          $ref: "#/components/schemas/Currency"
+        archived_at:
+          type: string
+          format: date-time
+        outflow_base_minor:
+          type: integer
+          format: int64
+          description: Positive total that left the account, excluding transfers.
+        inflow_base_minor:
+          type: integer
+          format: int64
+        transaction_count:
+          type: integer
+          format: int64
+    SpendingAnalysis:
+      type: object
+      additionalProperties: false
+      required:
+        - period
+        - totals
+        - series
+        - categories
+        - category_series
+        - weekdays
+        - days
+        - payees
+        - accounts
+      properties:
+        period:
+          $ref: "#/components/schemas/SpendingAnalysisPeriod"
+        totals:
+          $ref: "#/components/schemas/SpendingAnalysisTotals"
+        series:
+          type: array
+          description: Contiguous time buckets covering the whole window, including empty ones.
+          items:
+            $ref: "#/components/schemas/SpendingAnalysisBucket"
+        categories:
+          type: array
+          items:
+            $ref: "#/components/schemas/SpendingAnalysisCategory"
+        category_series:
+          type: array
+          description: Sparse per-category bucket activity; buckets without activity are omitted.
+          items:
+            $ref: "#/components/schemas/SpendingAnalysisCategoryPoint"
+        weekdays:
+          type: array
+          items:
+            $ref: "#/components/schemas/SpendingAnalysisWeekday"
+        days:
+          type: array
+          description: Days with posted activity; days without activity are omitted.
+          items:
+            $ref: "#/components/schemas/SpendingAnalysisDay"
+        payees:
+          type: array
+          description: Highest-spending payees in the window.
+          items:
+            $ref: "#/components/schemas/SpendingAnalysisPayee"
+        accounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/SpendingAnalysisAccount"
     MonthlyBudgetItemWrite:
       type: object
       additionalProperties: false
@@ -1874,6 +2403,9 @@ components:
         - planned_base_minor
         - used_base_minor
         - remaining_base_minor
+        - category_icon_type
+        - category_icon_value
+        - category_color_key
       properties:
         id:
           type: string
@@ -1883,8 +2415,19 @@ components:
           format: uuid
         category_name:
           type: string
+        category_predefined_key:
+          allOf:
+            - $ref: "#/components/schemas/PredefinedCategoryKey"
+          readOnly: true
         category_icon:
           type: string
+          deprecated: true
+        category_icon_type:
+          $ref: "#/components/schemas/CategoryIconType"
+        category_icon_value:
+          type: string
+        category_color_key:
+          $ref: "#/components/schemas/CategoryColorKey"
         category_archived_at:
           type: string
           format: date-time
@@ -1993,7 +2536,6 @@ components:
       additionalProperties: false
       required:
         - category_id
-        - amount_base_minor
       properties:
         category_id:
           type: string
@@ -2001,6 +2543,12 @@ components:
         amount_base_minor:
           type: integer
           format: int64
+          description: >-
+            Signed amount in workspace base currency. It may be omitted only when the request
+            carries exactly one allocation, in which case it takes the transaction's total
+            entry base amount, which for a foreign-currency account is the value booked at the
+            transaction date's rate. A split must state every allocation amount, because the
+            division between categories is the client's decision and cannot be derived.
     TransactionWriteRequest:
       type: object
       additionalProperties: false

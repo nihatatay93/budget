@@ -318,6 +318,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/workspaces/{workspaceId}/spending-analysis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspaceId: components["parameters"]["WorkspaceID"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Analyze spending and income over time
+         * @description Returns posted, allocation-derived spending and income for an inclusive window, bucketed over time and broken down by category, weekday, day, payee, and account. Every figure is posted-only and expressed in workspace base-currency minor units, so the analysis describes settled reality rather than a forecast. Transfers carry no allocations and never read as spending. Each window is accompanied by the immediately preceding window of equal length so period-over-period movement is comparable. When dates are omitted, the server uses the trailing twelve workspace-local months. The window and the resolved bucket count are both bounded; see the query parameters.
+         */
+        get: operations["getSpendingAnalysis"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/workspaces/{workspaceId}/budgets": {
         parameters: {
             query?: never;
@@ -418,7 +440,7 @@ export interface paths {
         };
         /** Get a category in a workspace */
         get: operations["getCategory"];
-        /** Replace editable category fields */
+        /** Replace editable category fields; built-in categories retain their localized identity and update appearance only */
         put: operations["updateCategory"];
         post?: never;
         /** Archive a category without deleting its history */
@@ -583,13 +605,29 @@ export interface components {
         /** @enum {string} */
         CategoryKind: "expense" | "income";
         /** @enum {string} */
+        CategoryIconType: "system" | "emoji";
+        /** @enum {string} */
+        CategoryColorKey: "green" | "mint" | "blue" | "cyan" | "purple" | "pink" | "red" | "orange" | "amber" | "slate";
+        /** @enum {string} */
         SystemCategoryKey: "uncategorized_expense" | "uncategorized_income";
+        /**
+         * @description Stable identifier for a built-in category, which clients resolve to a localized name. A group_* key names a section: an ordinary category whose members carry it as their parent, so budgets and reports roll up through it like any other parent.
+         * @enum {string}
+         */
+        PredefinedCategoryKey: "group_food" | "group_home" | "group_transport" | "group_entertainment" | "group_lifestyle" | "group_misc" | "group_income" | "housing" | "groceries" | "dining" | "transportation" | "utilities" | "shopping" | "health" | "entertainment" | "subscriptions" | "travel" | "education" | "personal_care" | "gifts" | "other" | "salary" | "freelance" | "investment" | "rental_income" | "gift_income" | "refund" | "other_income";
         CategoryWriteRequest: {
             name: string;
             kind: components["schemas"]["CategoryKind"];
             /** Format: uuid */
             parent_id?: string;
+            /**
+             * @deprecated
+             * @description Legacy icon input. New clients must provide icon_type, icon_value, and color_key.
+             */
             icon?: string;
+            icon_type?: components["schemas"]["CategoryIconType"];
+            icon_value?: string;
+            color_key?: components["schemas"]["CategoryColorKey"];
         };
         Category: {
             /** Format: uuid */
@@ -601,7 +639,15 @@ export interface components {
             name: string;
             kind: components["schemas"]["CategoryKind"];
             readonly system_key?: components["schemas"]["SystemCategoryKey"];
+            readonly predefined_key?: components["schemas"]["PredefinedCategoryKey"];
+            /**
+             * @deprecated
+             * @description Legacy compatibility icon value. Use icon_type and icon_value instead.
+             */
             icon?: string;
+            icon_type: components["schemas"]["CategoryIconType"];
+            icon_value: string;
+            color_key: components["schemas"]["CategoryColorKey"];
             /** Format: date-time */
             archived_at?: string;
         };
@@ -665,7 +711,12 @@ export interface components {
             name: string;
             kind: components["schemas"]["CategoryKind"];
             readonly system_key?: components["schemas"]["SystemCategoryKey"];
+            readonly predefined_key?: components["schemas"]["PredefinedCategoryKey"];
+            /** @deprecated */
             icon?: string;
+            icon_type: components["schemas"]["CategoryIconType"];
+            icon_value: string;
+            color_key: components["schemas"]["CategoryColorKey"];
             /** Format: date-time */
             archived_at?: string;
             direct_base_minor: components["schemas"]["ProjectionAmounts"];
@@ -676,6 +727,196 @@ export interface components {
             summary: components["schemas"]["FinancialProjectionSummary"];
             accounts: components["schemas"]["FinancialProjectionAccount"][];
             categories: components["schemas"]["FinancialProjectionCategory"][];
+        };
+        /** @enum {string} */
+        AnalysisGranularity: "day" | "week" | "month";
+        SpendingAnalysisPeriod: {
+            /** Format: date */
+            from_date: string;
+            /** Format: date */
+            to_date: string;
+            /**
+             * Format: date
+             * @description Start of the equal-length window immediately preceding from_date.
+             */
+            comparison_from_date: string;
+            /**
+             * Format: date
+             * @description End of the comparison window; always the day before from_date.
+             */
+            comparison_to_date: string;
+            granularity: components["schemas"]["AnalysisGranularity"];
+            timezone: string;
+            base_currency: components["schemas"]["Currency"];
+        };
+        SpendingAnalysisTotals: {
+            /** Format: int64 */
+            income_base_minor: number;
+            /**
+             * Format: int64
+             * @description Positive when money left the workspace, matching reporting orientation.
+             */
+            spending_base_minor: number;
+            /**
+             * Format: int64
+             * @description Income minus spending.
+             */
+            net_base_minor: number;
+            /** Format: int64 */
+            comparison_income_base_minor: number;
+            /** Format: int64 */
+            comparison_spending_base_minor: number;
+            /** Format: int64 */
+            comparison_net_base_minor: number;
+            /** Format: int64 */
+            transaction_count: number;
+            /** Format: int64 */
+            spending_transaction_count: number;
+            /**
+             * Format: int64
+             * @description Largest single posted transaction net expense in the window.
+             */
+            largest_spending_base_minor: number;
+            /**
+             * Format: int64
+             * @description Calendar days in the window that carried posted spending.
+             */
+            spending_day_count: number;
+            /**
+             * Format: int64
+             * @description Inclusive length of the window in calendar days.
+             */
+            day_count: number;
+        };
+        SpendingAnalysisBucket: {
+            /** Format: date */
+            start_date: string;
+            /** Format: date */
+            end_date: string;
+            /** Format: int64 */
+            income_base_minor: number;
+            /** Format: int64 */
+            spending_base_minor: number;
+            /** Format: int64 */
+            net_base_minor: number;
+            /** Format: int64 */
+            transaction_count: number;
+        };
+        SpendingAnalysisCategory: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            parent_id?: string;
+            name: string;
+            kind: components["schemas"]["CategoryKind"];
+            readonly system_key?: components["schemas"]["SystemCategoryKey"];
+            readonly predefined_key?: components["schemas"]["PredefinedCategoryKey"];
+            icon_type: components["schemas"]["CategoryIconType"];
+            icon_value: string;
+            color_key: components["schemas"]["CategoryColorKey"];
+            /** Format: date-time */
+            archived_at?: string;
+            /** Format: int64 */
+            direct_base_minor: number;
+            /** Format: int64 */
+            rolled_up_base_minor: number;
+            /** Format: int64 */
+            comparison_direct_base_minor: number;
+            /** Format: int64 */
+            comparison_rolled_up_base_minor: number;
+            /** Format: int64 */
+            transaction_count: number;
+            /** Format: int64 */
+            rolled_up_transaction_count: number;
+            /**
+             * Format: int64
+             * @description Largest single allocation in the window, in reporting orientation.
+             */
+            largest_base_minor: number;
+            /** Format: date */
+            first_date?: string;
+            /** Format: date */
+            last_date?: string;
+        };
+        SpendingAnalysisCategoryPoint: {
+            /** Format: uuid */
+            category_id: string;
+            /**
+             * Format: date
+             * @description Bucket anchor, aligned with the series granularity.
+             */
+            start_date: string;
+            /**
+             * Format: int64
+             * @description Direct category activity in reporting orientation.
+             */
+            base_minor: number;
+        };
+        SpendingAnalysisWeekday: {
+            /** @description ISO weekday, where 1 is Monday and 7 is Sunday. */
+            weekday: number;
+            /** Format: int64 */
+            income_base_minor: number;
+            /** Format: int64 */
+            spending_base_minor: number;
+            /** Format: int64 */
+            transaction_count: number;
+        };
+        SpendingAnalysisDay: {
+            /** Format: date */
+            date: string;
+            /** Format: int64 */
+            income_base_minor: number;
+            /** Format: int64 */
+            spending_base_minor: number;
+            /** Format: int64 */
+            transaction_count: number;
+        };
+        SpendingAnalysisPayee: {
+            payee: string;
+            /** Format: int64 */
+            spending_base_minor: number;
+            /** Format: int64 */
+            income_base_minor: number;
+            /** Format: int64 */
+            transaction_count: number;
+            /** Format: date */
+            first_date: string;
+            /** Format: date */
+            last_date: string;
+        };
+        SpendingAnalysisAccount: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            type: components["schemas"]["AccountType"];
+            currency: components["schemas"]["Currency"];
+            /** Format: date-time */
+            archived_at?: string;
+            /**
+             * Format: int64
+             * @description Positive total that left the account, excluding transfers.
+             */
+            outflow_base_minor: number;
+            /** Format: int64 */
+            inflow_base_minor: number;
+            /** Format: int64 */
+            transaction_count: number;
+        };
+        SpendingAnalysis: {
+            period: components["schemas"]["SpendingAnalysisPeriod"];
+            totals: components["schemas"]["SpendingAnalysisTotals"];
+            /** @description Contiguous time buckets covering the whole window, including empty ones. */
+            series: components["schemas"]["SpendingAnalysisBucket"][];
+            categories: components["schemas"]["SpendingAnalysisCategory"][];
+            /** @description Sparse per-category bucket activity; buckets without activity are omitted. */
+            category_series: components["schemas"]["SpendingAnalysisCategoryPoint"][];
+            weekdays: components["schemas"]["SpendingAnalysisWeekday"][];
+            /** @description Days with posted activity; days without activity are omitted. */
+            days: components["schemas"]["SpendingAnalysisDay"][];
+            /** @description Highest-spending payees in the window. */
+            payees: components["schemas"]["SpendingAnalysisPayee"][];
+            accounts: components["schemas"]["SpendingAnalysisAccount"][];
         };
         MonthlyBudgetItemWrite: {
             /** Format: uuid */
@@ -696,7 +937,12 @@ export interface components {
             /** Format: uuid */
             category_id: string;
             category_name: string;
+            readonly category_predefined_key?: components["schemas"]["PredefinedCategoryKey"];
+            /** @deprecated */
             category_icon?: string;
+            category_icon_type: components["schemas"]["CategoryIconType"];
+            category_icon_value: string;
+            category_color_key: components["schemas"]["CategoryColorKey"];
             /** Format: date-time */
             category_archived_at?: string;
             /** Format: int64 */
@@ -753,8 +999,11 @@ export interface components {
         TransactionAllocationWrite: {
             /** Format: uuid */
             category_id: string;
-            /** Format: int64 */
-            amount_base_minor: number;
+            /**
+             * Format: int64
+             * @description Signed amount in workspace base currency. It may be omitted only when the request carries exactly one allocation, in which case it takes the transaction's total entry base amount, which for a foreign-currency account is the value booked at the transaction date's rate. A split must state every allocation amount, because the division between categories is the client's decision and cannot be derived.
+             */
+            amount_base_minor?: number;
         };
         TransactionWriteRequest: {
             kind: components["schemas"]["TransactionKind"];
@@ -908,6 +1157,12 @@ export interface components {
         ProjectionFromDate: string;
         /** @description Inclusive activity-period end and cumulative balance cutoff. Must be supplied with from_date. */
         ProjectionToDate: string;
+        /** @description Inclusive analysis-window start. Must be supplied with to_date. The window may span at most ten years, because the series carries one bucket per calendar step and so costs what the window spans rather than what happened inside it. */
+        AnalysisFromDate: string;
+        /** @description Inclusive analysis-window end. Must be supplied with from_date. */
+        AnalysisToDate: string;
+        /** @description Time-bucket width for the analysis series. Omitted means the server chooses a width that suits the window length, which is always a width it will accept. A width fine enough to produce more than 750 buckets over the requested window is refused, so a decade cannot be requested one day at a time. */
+        AnalysisGranularity: components["schemas"]["AnalysisGranularity"];
         /** @description Calendar month in YYYY-MM form. Defaults to the workspace-local current month. */
         BudgetMonthQuery: string;
         /** @description Calendar month in YYYY-MM form. */
@@ -1684,6 +1939,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FinancialProjection"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+    getSpendingAnalysis: {
+        parameters: {
+            query?: {
+                /** @description Inclusive analysis-window start. Must be supplied with to_date. The window may span at most ten years, because the series carries one bucket per calendar step and so costs what the window spans rather than what happened inside it. */
+                from_date?: components["parameters"]["AnalysisFromDate"];
+                /** @description Inclusive analysis-window end. Must be supplied with from_date. */
+                to_date?: components["parameters"]["AnalysisToDate"];
+                /** @description Time-bucket width for the analysis series. Omitted means the server chooses a width that suits the window length, which is always a width it will accept. A width fine enough to produce more than 750 buckets over the requested window is refused, so a decade cannot be requested one day at a time. */
+                granularity?: components["parameters"]["AnalysisGranularity"];
+            };
+            header?: {
+                /** @description Optional caller-provided correlation identifier. */
+                "X-Request-ID"?: components["parameters"]["RequestID"];
+            };
+            path: {
+                workspaceId: components["parameters"]["WorkspaceID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The workspace spending analysis. */
+            200: {
+                headers: {
+                    "X-Request-ID": components["headers"]["RequestID"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpendingAnalysis"];
                 };
             };
             400: components["responses"]["BadRequest"];

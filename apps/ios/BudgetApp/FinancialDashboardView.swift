@@ -12,78 +12,49 @@ struct WorkspaceOverviewView: View {
     }
 
     var body: some View {
-        List {
-            if let projection = model.financialProjection {
-                Section {
+        ScrollView {
+            VStack(alignment: .leading, spacing: BudgetTheme.Space.section) {
+                if let projection = model.financialProjection {
                     OverviewBalanceCard(projection: projection)
-                        .listRowInsets(EdgeInsets())
-                        .listRowBackground(Color.clear)
-                }
 
-                Section("This period") {
-                    OverviewActivityComparison(projection: projection)
-                }
+                    BudgetSection("This period") {
+                        OverviewActivityCard(projection: projection)
+                    }
 
-                Section {
-                    Button(action: onOpenBudget) {
-                        if let budget = model.monthlyBudget,
-                           budget.month == currentBudgetMonth {
-                            DashboardBudgetProgress(plan: budget)
-                        } else if model.isLoadingBudget {
-                            ProgressView("Loading current budget…")
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        } else {
-                            Label("No plan for this month", systemImage: "chart.pie")
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                    BudgetSection("Monthly plan", action: ("Open Budget", onOpenBudget)) {
+                        Button(action: onOpenBudget) {
+                            monthlyPlanCard
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityHint("Opens the Budget tab")
                     }
-                    .buttonStyle(.plain)
-                } header: {
-                    HStack {
-                        Text("Monthly plan")
-                        Spacer()
-                        Text("Open Budget")
-                            .font(.caption)
-                            .foregroundStyle(.tint)
-                            .textCase(nil)
-                    }
-                }
 
-                Section("Recent activity") {
-                    if recentTransactions.isEmpty {
-                        ContentUnavailableView(
-                            "No transactions yet",
-                            systemImage: "list.bullet.rectangle",
-                            description: Text("Add the first entry to begin building your ledger.")
+                    BudgetSection(
+                        "Recent activity",
+                        action: recentTransactions.isEmpty ? nil : ("See all", onOpenTransactions)
+                    ) {
+                        recentActivityCard
+                    }
+                } else if let message = model.resourceErrorMessage {
+                    BudgetCard {
+                        BudgetMessage(
+                            title: "Overview unavailable",
+                            systemImage: "exclamationmark.triangle",
+                            message: .resolved(message),
+                            action: ("Try again", reload)
                         )
                     }
-                    ForEach(recentTransactions) { transaction in
-                        TransactionRow(
-                            transaction: transaction,
-                            workspace: workspace,
-                            accounts: model.accounts
-                        )
+                } else {
+                    BudgetCard {
+                        BudgetLoading("Loading overview…")
                     }
-                    Button("Review all transactions", systemImage: "arrow.right") {
-                        onOpenTransactions()
-                    }
-                }
-            } else if let message = model.resourceErrorMessage {
-                Section {
-                    ContentUnavailableView(
-                        "Overview unavailable",
-                        systemImage: "exclamationmark.triangle",
-                        description: Text(message)
-                    )
-                    Button("Try again") { reload() }
-                }
-            } else {
-                Section {
-                    ProgressView("Loading overview…")
-                        .frame(maxWidth: .infinity)
                 }
             }
+            .padding(.horizontal, BudgetTheme.Space.screen)
+            .padding(.top, 4)
+            .padding(.bottom, 32)
         }
+        .budgetScreen()
         .navigationTitle("Overview")
         .toolbar {
             if workspace.canManage {
@@ -103,6 +74,49 @@ struct WorkspaceOverviewView: View {
         .refreshable { await refresh() }
     }
 
+    @ViewBuilder
+    private var monthlyPlanCard: some View {
+        if let budget = model.monthlyBudget, budget.month == currentBudgetMonth {
+            BudgetCard {
+                BudgetPlanSummary(plan: budget)
+            }
+        } else if model.isLoadingBudget {
+            BudgetCard {
+                BudgetLoading("Loading current budget…")
+            }
+        } else {
+            BudgetCard {
+                BudgetMessage(
+                    title: "No plan for this month",
+                    systemImage: "chart.pie",
+                    message: "Set a spending plan to track how the month is going."
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var recentActivityCard: some View {
+        if recentTransactions.isEmpty {
+            BudgetCard {
+                BudgetMessage(
+                    title: "No transactions yet",
+                    systemImage: "list.bullet.rectangle",
+                    message: "Add the first entry to begin building your ledger."
+                )
+            }
+        } else {
+            BudgetRowGroup(items: recentTransactions, hairlineInset: 50) { transaction in
+                TransactionRow(
+                    transaction: transaction,
+                    workspace: workspace,
+                    accounts: model.accounts,
+                    categories: model.categories
+                )
+            }
+        }
+    }
+
     private var recentTransactions: [BudgetTransaction] {
         Array(model.transactions.prefix(5))
     }
@@ -120,71 +134,101 @@ struct WorkspaceOverviewView: View {
     }
 }
 
+/// The one place on the screen that carries the brand gradient. Everything else stays quiet so
+/// this reads as the headline figure.
 private struct OverviewBalanceCard: View {
     let projection: BudgetFinancialProjection
 
+    private var currency: BudgetCurrency { projection.period.baseCurrency }
+    private var amounts: BudgetProjectionAmounts { projection.summary.balanceBaseMinor }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Posted balance")
-                        .font(.subheadline.weight(.semibold))
-                    Text(
-                        "\(displayDate(projection.period.fromDate))–"
-                        + displayDate(projection.period.toDate)
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 6) {
+                    BudgetEyebrow("Posted balance", color: .white.opacity(0.55))
+                    Text(currency.formatted(minorUnits: amounts.posted))
+                        .font(.budgetHero)
+                        .foregroundStyle(.white)
+                        .minimumScaleFactor(0.5)
+                        .lineLimit(1)
                 }
-                Spacer()
-                Text(projection.period.baseCurrency.rawValue)
-                    .font(.caption.weight(.bold))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(.thinMaterial, in: Capsule())
+                Spacer(minLength: 12)
+                Text(currency.rawValue)
+                    .font(.system(size: 11, weight: .bold))
+                    .tracking(0.6)
+                    .foregroundStyle(.white.opacity(0.85))
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(.white.opacity(0.13), in: Capsule())
+                    .overlay { Capsule().stroke(.white.opacity(0.14), lineWidth: 1) }
             }
-            Text(projection.period.baseCurrency.formatted(
-                minorUnits: projection.summary.balanceBaseMinor.posted
-            ))
-            .font(.largeTitle.monospacedDigit().weight(.semibold))
-            .minimumScaleFactor(0.6)
-            .lineLimit(1)
-            Divider()
-            LabeledContent(
-                "Pending delta",
-                value: signedMoney(
-                    projection.summary.balanceBaseMinor.pending,
-                    currency: projection.period.baseCurrency
-                )
+
+            Text(
+                "\(budgetDisplayDate(projection.period.fromDate)) – "
+                + budgetDisplayDate(projection.period.toDate)
             )
-            LabeledContent(
-                "Projected",
-                value: projection.period.baseCurrency.formatted(
-                    minorUnits: projection.summary.balanceBaseMinor.projected
+            .font(.caption)
+            .foregroundStyle(.white.opacity(0.6))
+
+            Rectangle()
+                .fill(.white.opacity(0.12))
+                .frame(height: 1)
+
+            HStack(spacing: 12) {
+                heroStat(
+                    "Pending delta",
+                    budgetSignedMoney(amounts.pending, currency: currency)
                 )
-            )
+                Rectangle()
+                    .fill(.white.opacity(0.12))
+                    .frame(width: 1, height: 30)
+                heroStat(
+                    "Projected",
+                    currency.formatted(minorUnits: amounts.projected)
+                )
+            }
         }
-        .padding(20)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22))
+        .padding(22)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            LinearGradient(
+                colors: [
+                    BudgetTheme.forest.opacity(0.85),
+                    BudgetTheme.deepForest
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(cornerRadius: BudgetTheme.Radius.large, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: BudgetTheme.Radius.large, style: .continuous)
+                .stroke(.white.opacity(0.1), lineWidth: 1)
+        }
+        .shadow(color: BudgetTheme.deepForest.opacity(0.5), radius: 22, y: 12)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            "Posted balance "
-            + projection.period.baseCurrency.formatted(
-                minorUnits: projection.summary.balanceBaseMinor.posted
-            )
-            + ", pending delta "
-            + projection.period.baseCurrency.formatted(
-                minorUnits: projection.summary.balanceBaseMinor.pending
-            )
-            + ", projected "
-            + projection.period.baseCurrency.formatted(
-                minorUnits: projection.summary.balanceBaseMinor.projected
-            )
+            "Posted balance \(currency.formatted(minorUnits: amounts.posted)), "
+            + "pending delta \(currency.formatted(minorUnits: amounts.pending)), "
+            + "projected \(currency.formatted(minorUnits: amounts.projected))"
         )
+    }
+
+    private func heroStat(_ title: LocalizedStringKey, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            BudgetEyebrow(title, color: .white.opacity(0.5))
+            Text(value)
+                .font(.budgetAmountSmall)
+                .foregroundStyle(.white.opacity(0.92))
+                .minimumScaleFactor(0.7)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
-private struct OverviewActivityComparison: View {
+private struct OverviewActivityCard: View {
     let projection: BudgetFinancialProjection
 
     private var comparison: FinancialActivityComparison {
@@ -195,32 +239,34 @@ private struct OverviewActivityComparison: View {
     }
 
     var body: some View {
-        VStack(spacing: 16) {
-            OverviewActivityLine(
-                title: "Income",
-                systemImage: "arrow.down.left.circle.fill",
-                color: .green,
-                amount: projection.summary.incomeBaseMinor.posted,
-                pending: projection.summary.incomeBaseMinor.pending,
-                progress: comparison.incomeProgress,
-                currency: projection.period.baseCurrency
-            )
-            OverviewActivityLine(
-                title: "Spending",
-                systemImage: "arrow.up.right.circle.fill",
-                color: .orange,
-                amount: projection.summary.spendingBaseMinor.posted,
-                pending: projection.summary.spendingBaseMinor.pending,
-                progress: comparison.spendingProgress,
-                currency: projection.period.baseCurrency
-            )
+        BudgetCard {
+            VStack(spacing: 18) {
+                OverviewActivityLine(
+                    title: "Income",
+                    systemImage: "arrow.down.left",
+                    color: BudgetTheme.positive,
+                    amount: projection.summary.incomeBaseMinor.posted,
+                    pending: projection.summary.incomeBaseMinor.pending,
+                    progress: comparison.incomeProgress,
+                    currency: projection.period.baseCurrency
+                )
+                BudgetHairline()
+                OverviewActivityLine(
+                    title: "Spending",
+                    systemImage: "arrow.up.right",
+                    color: BudgetTheme.spend,
+                    amount: projection.summary.spendingBaseMinor.posted,
+                    pending: projection.summary.spendingBaseMinor.pending,
+                    progress: comparison.spendingProgress,
+                    currency: projection.period.baseCurrency
+                )
+            }
         }
-        .padding(.vertical, 4)
     }
 }
 
 private struct OverviewActivityLine: View {
-    let title: String
+    let title: LocalizedStringKey
     let systemImage: String
     let color: Color
     let amount: Int64
@@ -229,42 +275,27 @@ private struct OverviewActivityLine: View {
     let currency: BudgetCurrency
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .firstTextBaseline) {
-                    activityLabel
-                    Spacer(minLength: 12)
-                    amountLabel
-                }
-                VStack(alignment: .leading, spacing: 4) {
-                    activityLabel
-                    amountLabel
-                }
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                BudgetIconBadge(systemImage: systemImage, color: color, size: 34)
+                Text(title)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(BudgetTheme.primaryText)
+                Spacer(minLength: 12)
+                Text(currency.formatted(minorUnits: amount))
+                    .font(.budgetAmount)
+                    .foregroundStyle(BudgetTheme.primaryText)
+                    .minimumScaleFactor(0.7)
+                    .lineLimit(1)
             }
-            ProgressView(value: progress)
-                .tint(color)
-                .accessibilityLabel("\(title) relative amount")
-                .accessibilityValue(currency.formatted(minorUnits: amount))
-            Text(
-                pending == 0
-                    ? "No pending activity"
-                    : "\(signedMoney(pending, currency: currency)) pending"
-            )
-            .font(.caption)
-            .foregroundStyle(.secondary)
+            BudgetMeter(progress: progress, tint: color)
+            if pending != 0 {
+                Text("\(budgetSignedMoney(pending, currency: currency)) pending")
+                    .font(.caption)
+                    .foregroundStyle(BudgetTheme.pending)
+            }
         }
-        .accessibilityElement(children: .contain)
-    }
-
-    private var activityLabel: some View {
-        Label(title, systemImage: systemImage)
-            .font(.headline)
-            .foregroundStyle(color)
-    }
-
-    private var amountLabel: some View {
-        Text(currency.formatted(minorUnits: amount))
-            .font(.headline.monospacedDigit())
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -284,6 +315,8 @@ struct FinancialActivityComparison: Equatable {
     }
 }
 
+// MARK: - Reports
+
 struct FinancialReportsView: View {
     let workspace: BudgetWorkspace
     @ObservedObject var model: AppModel
@@ -296,120 +329,90 @@ struct FinancialReportsView: View {
     @State private var rangeError: String?
 
     var body: some View {
-        List {
-            Section {
-                Toggle("Custom date range", isOn: $usesCustomRange)
-                if usesCustomRange {
-                    DatePicker("From", selection: $fromDate, displayedComponents: .date)
-                    DatePicker("To", selection: $toDate, displayedComponents: .date)
-                    Button("Apply range") { applyRange() }
-                }
-                if let rangeError {
-                    Label(rangeError, systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.red)
-                }
-            } footer: {
-                Text("Dates are inclusive and interpreted in \(workspace.timezone).")
-            }
+        ScrollView {
+            VStack(alignment: .leading, spacing: BudgetTheme.Space.section) {
+                rangeCard
 
-            if let projection = model.financialProjection {
-                Section {
-                    Text(
-                        "\(displayDate(projection.period.fromDate))–"
-                        + "\(displayDate(projection.period.toDate)) · \(projection.period.timezone)"
+                if let projection = model.financialProjection {
+                    BudgetSection(
+                        "Posted overview",
+                        caption: "Posted figures are authoritative. Projected totals add pending activity; they are not a forecast."
+                    ) {
+                        VStack(spacing: 10) {
+                            ProjectionSummaryCard(
+                                title: "Balance",
+                                pendingTitle: "Pending delta",
+                                amounts: projection.summary.balanceBaseMinor,
+                                accent: BudgetTheme.forest,
+                                currency: projection.period.baseCurrency
+                            )
+                            ProjectionSummaryCard(
+                                title: "Income",
+                                pendingTitle: "Pending income",
+                                amounts: projection.summary.incomeBaseMinor,
+                                accent: BudgetTheme.positive,
+                                currency: projection.period.baseCurrency
+                            )
+                            ProjectionSummaryCard(
+                                title: "Spending",
+                                pendingTitle: "Pending spending",
+                                amounts: projection.summary.spendingBaseMinor,
+                                accent: BudgetTheme.spend,
+                                currency: projection.period.baseCurrency
+                            )
+                        }
+                    }
+
+                    BudgetSection("Current monthly budget") {
+                        currentBudgetCard
+                    }
+
+                    BudgetSection("Account balances") {
+                        if projection.accounts.isEmpty {
+                            BudgetCard {
+                                BudgetMessage(
+                                    title: "No accounts",
+                                    systemImage: "building.columns",
+                                    message: "Create an account to begin tracking money."
+                                )
+                            }
+                        } else {
+                            BudgetRowGroup(items: projection.accounts) { account in
+                                ProjectionAccountRow(
+                                    account: account,
+                                    baseCurrency: projection.period.baseCurrency
+                                )
+                            }
+                        }
+                    }
+
+                    ProjectionCategorySection(
+                        title: "Spending by category",
+                        kind: .expense,
+                        categories: projection.categories,
+                        currency: projection.period.baseCurrency
                     )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .accessibilityLabel(
-                        "Reporting period from \(projection.period.fromDate) through "
-                        + "\(projection.period.toDate), \(projection.period.timezone)"
+                    ProjectionCategorySection(
+                        title: "Income by category",
+                        kind: .income,
+                        categories: projection.categories,
+                        currency: projection.period.baseCurrency
                     )
-
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 145), spacing: 10)], spacing: 10) {
-                        ProjectionSummaryCard(
-                            title: "Balance",
-                            pendingTitle: "Pending delta",
-                            amounts: projection.summary.balanceBaseMinor,
-                            currency: projection.period.baseCurrency
-                        )
-                        ProjectionSummaryCard(
-                            title: "Income",
-                            pendingTitle: "Pending income",
-                            amounts: projection.summary.incomeBaseMinor,
-                            currency: projection.period.baseCurrency
-                        )
-                        ProjectionSummaryCard(
-                            title: "Spending",
-                            pendingTitle: "Pending spending",
-                            amounts: projection.summary.spendingBaseMinor,
-                            currency: projection.period.baseCurrency
-                        )
-                    }
-                    .padding(.vertical, 4)
-                } header: {
-                    Text("Posted overview")
-                } footer: {
-                    Text("Posted figures are authoritative. Projected totals add pending activity; they are not a forecast.")
-                }
-
-                Section("Current monthly budget") {
-                    if let budget = model.monthlyBudget, budget.month == currentBudgetMonth {
-                        NavigationLink {
-                            MonthlyBudgetView(workspace: workspace, model: model)
-                        } label: {
-                            DashboardBudgetProgress(plan: budget)
-                        }
-                    } else if model.isLoadingBudget {
-                        ProgressView("Loading current budget…")
-                    } else if model.budgetErrorMessage != nil {
-                        NavigationLink {
-                            MonthlyBudgetView(workspace: workspace, model: model)
-                        } label: {
-                            Label("Monthly budget unavailable", systemImage: "chart.pie")
-                                .foregroundStyle(.secondary)
-                        }
-                    } else {
-                        NavigationLink {
-                            MonthlyBudgetView(workspace: workspace, model: model)
-                        } label: {
-                            Label("No plan yet · Create or review", systemImage: "chart.pie")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-
-                Section("Account balances") {
-                    if projection.accounts.isEmpty {
-                        ContentUnavailableView("No accounts", systemImage: "building.columns")
-                    }
-                    ForEach(projection.accounts) { account in
-                        ProjectionAccountRow(
-                            account: account,
-                            baseCurrency: projection.period.baseCurrency
+                } else if !model.isLoadingResources && !model.isLoadingProjection {
+                    BudgetCard {
+                        BudgetMessage(
+                            title: "Reports unavailable",
+                            systemImage: "chart.bar.xaxis",
+                            message: .resolved(model.resourceErrorMessage ?? L10n.text("Pull to refresh and try again."))
                         )
                     }
                 }
-
-                ProjectionCategorySection(
-                    title: "Spending by category",
-                    kind: .expense,
-                    categories: projection.categories,
-                    currency: projection.period.baseCurrency
-                )
-                ProjectionCategorySection(
-                    title: "Income by category",
-                    kind: .income,
-                    categories: projection.categories,
-                    currency: projection.period.baseCurrency
-                )
-            } else if !model.isLoadingResources && !model.isLoadingProjection {
-                ContentUnavailableView(
-                    "Reports unavailable",
-                    systemImage: "chart.bar.xaxis",
-                    description: Text(model.resourceErrorMessage ?? "Pull to refresh and try again.")
-                )
             }
+            .padding(.horizontal, BudgetTheme.Space.screen)
+            .padding(.top, 8)
+            .padding(.bottom, 32)
         }
+        .budgetScreen()
         .navigationTitle("Reports")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: workspace.id) {
@@ -427,9 +430,9 @@ struct FinancialReportsView: View {
         }
         .overlay {
             if model.isLoadingProjection {
-                ProgressView("Updating reports…")
-                    .padding()
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+                BudgetLoading("Updating reports…")
+                    .padding(20)
+                    .budgetSurface(radius: BudgetTheme.Radius.small)
             }
         }
         .onChange(of: usesCustomRange) { _, custom in
@@ -452,6 +455,70 @@ struct FinancialReportsView: View {
         }
     }
 
+    private var rangeCard: some View {
+        BudgetCard {
+            VStack(alignment: .leading, spacing: 14) {
+                Toggle("Custom date range", isOn: $usesCustomRange)
+                    .font(.subheadline.weight(.medium))
+                    .tint(BudgetTheme.forest)
+                if usesCustomRange {
+                    BudgetHairline()
+                    DatePicker("From", selection: $fromDate, displayedComponents: .date)
+                        .font(.subheadline)
+                    DatePicker("To", selection: $toDate, displayedComponents: .date)
+                        .font(.subheadline)
+                    Button("Apply range", action: applyRange)
+                        .buttonStyle(BudgetPrimaryButtonStyle())
+                }
+                if let rangeError {
+                    Label(rangeError, systemImage: "exclamationmark.triangle.fill")
+                        .font(.footnote)
+                        .foregroundStyle(BudgetTheme.over)
+                }
+                if let projection = model.financialProjection {
+                    Text(
+                        "\(budgetDisplayDate(projection.period.fromDate)) – "
+                        + "\(budgetDisplayDate(projection.period.toDate)) · \(projection.period.timezone)"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(BudgetTheme.tertiaryText)
+                    .accessibilityLabel(
+                        "Reporting period from \(projection.period.fromDate) through "
+                        + "\(projection.period.toDate), \(projection.period.timezone)"
+                    )
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var currentBudgetCard: some View {
+        NavigationLink {
+            MonthlyBudgetView(workspace: workspace, model: model)
+        } label: {
+            BudgetCard {
+                if let budget = model.monthlyBudget, budget.month == currentBudgetMonth {
+                    BudgetPlanSummary(plan: budget)
+                } else if model.isLoadingBudget {
+                    BudgetLoading("Loading current budget…")
+                } else if model.budgetErrorMessage != nil {
+                    BudgetMessage(
+                        title: "Monthly budget unavailable",
+                        systemImage: "chart.pie",
+                        message: "Open the Budget tab to retry."
+                    )
+                } else {
+                    BudgetMessage(
+                        title: "No plan yet",
+                        systemImage: "chart.pie",
+                        message: "Create or review this month's plan."
+                    )
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
     private var selectedRange: BudgetProjectionRange? {
         guard usesCustomRange else { return nil }
         return BudgetProjectionRange(fromDate: dateOnly(fromDate), toDate: dateOnly(toDate))
@@ -463,7 +530,7 @@ struct FinancialReportsView: View {
 
     private func applyRange() {
         guard fromDate <= toDate else {
-            rangeError = "The start date must be on or before the end date."
+            rangeError = L10n.text("The start date must be on or before the end date.")
             return
         }
         rangeError = nil
@@ -473,140 +540,90 @@ struct FinancialReportsView: View {
     }
 }
 
-private struct DashboardBudgetProgress: View {
+/// The plan headline shared by Overview, Reports, and the Budget tab, so one plan never renders
+/// three different ways.
+struct BudgetPlanSummary: View {
     let plan: MonthlyBudgetPlan
 
+    private var usage: BudgetUsagePresentation {
+        BudgetUsagePresentation(
+            planned: plan.plannedBaseMinor,
+            used: plan.usedBaseMinor,
+            remaining: plan.remainingBaseMinor
+        )
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(plan.name)
-                        .font(.headline)
-                    Text("Posted category allocations")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                Text(plan.name)
+                    .font(.headline)
+                    .foregroundStyle(BudgetTheme.primaryText)
                 Spacer(minLength: 12)
-                VStack(alignment: .trailing, spacing: 3) {
-                    Text("\(plan.baseCurrency.formatted(minorUnits: plan.usedBaseMinor)) used")
-                        .font(.subheadline.monospacedDigit())
-                    Text("\(plan.baseCurrency.formatted(minorUnits: plan.remainingBaseMinor)) remaining")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(plan.remainingBaseMinor < 0 ? .red : .secondary)
-                }
+                BudgetUsageStateLabel(state: usage.state)
             }
-            ProgressView(value: progress)
-                .tint(plan.remainingBaseMinor < 0 ? .red : .green)
-            Text("of \(plan.baseCurrency.formatted(minorUnits: plan.plannedBaseMinor)) planned")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            BudgetMeter(progress: usage.progress, tint: budgetUsageColor(usage.state))
+            HStack(spacing: 12) {
+                BudgetStat(
+                    title: "Planned",
+                    value: plan.baseCurrency.formatted(minorUnits: plan.plannedBaseMinor)
+                )
+                BudgetStat(
+                    title: "Used",
+                    value: plan.baseCurrency.formatted(minorUnits: plan.usedBaseMinor)
+                )
+                BudgetStat(
+                    title: "Remaining",
+                    value: plan.baseCurrency.formatted(minorUnits: plan.remainingBaseMinor),
+                    valueColor: plan.remainingBaseMinor < 0
+                        ? BudgetTheme.over
+                        : BudgetTheme.primaryText
+                )
+            }
         }
-        .padding(.vertical, 4)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel(
             "\(plan.name), \(plan.baseCurrency.formatted(minorUnits: plan.usedBaseMinor)) used, "
             + "\(plan.baseCurrency.formatted(minorUnits: plan.remainingBaseMinor)) remaining, "
             + "of \(plan.baseCurrency.formatted(minorUnits: plan.plannedBaseMinor)) planned"
         )
     }
-
-    private var progress: Double {
-        guard plan.plannedBaseMinor > 0 else { return 0 }
-        return min(1, max(0, Double(plan.usedBaseMinor) / Double(plan.plannedBaseMinor)))
-    }
-}
-
-struct ProjectionOverviewRow: View {
-    let projection: BudgetFinancialProjection?
-    let isLoading: Bool
-
-    var body: some View {
-        if let projection {
-            HStack(spacing: 12) {
-                Image(systemName: "chart.bar.fill")
-                    .font(.title2)
-                    .foregroundStyle(.green)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Financial overview")
-                        .font(.headline)
-                    Text(projection.period.baseCurrency.formatted(
-                        minorUnits: projection.summary.balanceBaseMinor.posted
-                    ))
-                    .font(.title3.monospacedDigit().weight(.semibold))
-                    Text(
-                        "Period activity · "
-                        + "\(projection.period.baseCurrency.formatted(minorUnits: projection.summary.incomeBaseMinor.posted)) income · "
-                        + "\(projection.period.baseCurrency.formatted(minorUnits: projection.summary.spendingBaseMinor.posted)) spent"
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                }
-            }
-            .padding(.vertical, 4)
-            .accessibilityElement(children: .combine)
-        } else if isLoading {
-            ProgressView("Loading financial overview…")
-        } else {
-            Label("Financial overview unavailable", systemImage: "chart.bar.xaxis")
-                .foregroundStyle(.secondary)
-        }
-    }
 }
 
 private struct ProjectionSummaryCard: View {
-    let title: String
-    let pendingTitle: String
+    let title: LocalizedStringKey
+    let pendingTitle: LocalizedStringKey
     let amounts: BudgetProjectionAmounts
+    let accent: Color
     let currency: BudgetCurrency
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-            Text(currency.formatted(minorUnits: amounts.posted))
-                .font(.title3.monospacedDigit().weight(.semibold))
-                .minimumScaleFactor(0.75)
-            Text("Posted")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Divider()
-            ProjectionAmountLine(
-                title: pendingTitle,
-                amount: signedMoney(amounts.pending, currency: currency)
-            )
-            ProjectionAmountLine(
-                title: "Projected",
-                amount: currency.formatted(minorUnits: amounts.projected)
-            )
+        BudgetCard {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .firstTextBaseline) {
+                    BudgetEyebrow(title, color: accent)
+                    Spacer(minLength: 12)
+                    Text(currency.formatted(minorUnits: amounts.posted))
+                        .font(.budgetAmountLarge)
+                        .foregroundStyle(BudgetTheme.primaryText)
+                        .minimumScaleFactor(0.6)
+                        .lineLimit(1)
+                }
+                BudgetHairline()
+                HStack(spacing: 12) {
+                    BudgetStat(
+                        title: pendingTitle,
+                        value: budgetSignedMoney(amounts.pending, currency: currency)
+                    )
+                    BudgetStat(
+                        title: "Projected",
+                        value: currency.formatted(minorUnits: amounts.projected),
+                        alignment: .trailing
+                    )
+                }
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(.green.opacity(0.1), in: RoundedRectangle(cornerRadius: 14))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(
-            "\(title), posted \(currency.formatted(minorUnits: amounts.posted)), "
-            + "\(pendingTitle) \(currency.formatted(minorUnits: amounts.pending)), "
-            + "projected \(currency.formatted(minorUnits: amounts.projected))"
-        )
-    }
-}
-
-private struct ProjectionAmountLine: View {
-    let title: String
-    let amount: String
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(title)
-                .foregroundStyle(.secondary)
-            Spacer(minLength: 4)
-            Text(amount)
-                .monospacedDigit()
-        }
-        .font(.caption2)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -615,29 +632,33 @@ private struct ProjectionAccountRow: View {
     let baseCurrency: BudgetCurrency
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 4) {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(account.name)
-                    .font(.headline)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(BudgetTheme.primaryText)
                 Text(account.type.title + (account.archivedAt == nil ? "" : " · Archived"))
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BudgetTheme.tertiaryText)
             }
             Spacer(minLength: 12)
-            VStack(alignment: .trailing, spacing: 4) {
+            VStack(alignment: .trailing, spacing: 3) {
                 Text(account.currency.formatted(minorUnits: account.nativeBalanceMinor.posted))
-                    .font(.subheadline.monospacedDigit())
+                    .font(.budgetAmount)
+                    .foregroundStyle(BudgetTheme.primaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                 if account.nativeBalanceMinor.pending != 0 {
                     Text(
-                        "\(signedMoney(account.nativeBalanceMinor.pending, currency: account.currency)) pending"
+                        "\(budgetSignedMoney(account.nativeBalanceMinor.pending, currency: account.currency)) pending"
                     )
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(BudgetTheme.pending)
                 }
                 if account.currency != baseCurrency {
                     Text("\(baseCurrency.formatted(minorUnits: account.baseBalanceMinor.posted)) base")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(BudgetTheme.tertiaryText)
                 }
             }
         }
@@ -646,41 +667,61 @@ private struct ProjectionAccountRow: View {
 }
 
 private struct ProjectionCategorySection: View {
-    let title: String
+    let title: LocalizedStringKey
     let kind: BudgetCategoryKind
     let categories: [BudgetProjectionCategory]
     let currency: BudgetCurrency
 
     var body: some View {
-        Section(title) {
+        BudgetSection(title) {
             if visibleCategories.isEmpty {
-                Text("No net activity in this period.")
-                    .foregroundStyle(.secondary)
-            }
-            ForEach(visibleCategories) { category in
-                HStack(alignment: .firstTextBaseline) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text((category.icon.map { "\($0) " } ?? "") + category.name)
-                            .font(.headline)
-                        Text(category.archivedAt == nil ? rollupLabel(category) : "\(rollupLabel(category)) · Archived")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.leading, CGFloat(categoryDepth(category, in: categories)) * 12)
-                    Spacer(minLength: 12)
-                    VStack(alignment: .trailing, spacing: 4) {
-                        Text(currency.formatted(minorUnits: category.rolledUpBaseMinor.posted))
-                            .font(.subheadline.monospacedDigit())
-                        if category.rolledUpBaseMinor.pending != 0 {
-                            Text("\(signedMoney(category.rolledUpBaseMinor.pending, currency: currency)) pending")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
+                BudgetCard {
+                    Text("No net activity in this period.")
+                        .font(.subheadline)
+                        .foregroundStyle(BudgetTheme.tertiaryText)
                 }
-                .accessibilityElement(children: .combine)
+            } else {
+                BudgetRowGroup(items: visibleCategories, hairlineInset: 40) { category in
+                    row(category)
+                }
             }
         }
+    }
+
+    private func row(_ category: BudgetProjectionCategory) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                CategoryNameLabel(
+                    name: category.name,
+                    kind: category.kind,
+                    predefinedKey: category.predefinedKey,
+                    systemKey: nil,
+                    iconType: category.iconType,
+                    iconValue: category.iconValue,
+                    colorKey: category.colorKey
+                )
+                .font(.subheadline.weight(.semibold))
+                Text(category.archivedAt == nil ? rollupLabel(category) : "\(rollupLabel(category)) · Archived")
+                    .font(.caption)
+                    .foregroundStyle(BudgetTheme.tertiaryText)
+                    .padding(.leading, 36)
+            }
+            .padding(.leading, CGFloat(categoryDepth(category, in: categories)) * 12)
+            Spacer(minLength: 12)
+            VStack(alignment: .trailing, spacing: 3) {
+                Text(currency.formatted(minorUnits: category.rolledUpBaseMinor.posted))
+                    .font(.budgetAmount)
+                    .foregroundStyle(BudgetTheme.primaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                if category.rolledUpBaseMinor.pending != 0 {
+                    Text("\(budgetSignedMoney(category.rolledUpBaseMinor.pending, currency: currency)) pending")
+                        .font(.caption)
+                        .foregroundStyle(BudgetTheme.pending)
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 
     private var visibleCategories: [BudgetProjectionCategory] {
@@ -690,13 +731,116 @@ private struct ProjectionCategorySection: View {
     }
 
     private func rollupLabel(_ category: BudgetProjectionCategory) -> String {
-        categories.contains { $0.parentID == category.id } ? "Includes subcategories" : "Category total"
+        categories.contains { $0.parentID == category.id } ? L10n.text("Includes subcategories") : L10n.text("Category total")
     }
 }
 
-private func signedMoney(_ amount: Int64, currency: BudgetCurrency) -> String {
-    let formatted = currency.formatted(minorUnits: amount)
-    return amount > 0 ? "+\(formatted)" : formatted
+// MARK: - Shared states
+
+/// Replaces `ContentUnavailableView` inside cards, which brought its own centered layout and
+/// spacing and never matched the surrounding rhythm.
+struct BudgetMessage: View {
+    let title: LocalizedStringKey
+    let systemImage: String
+    var message: LocalizedStringKey?
+    var action: (title: LocalizedStringKey, handler: () -> Void)?
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            BudgetIconBadge(systemImage: systemImage, color: BudgetTheme.secondaryText, size: 36)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(BudgetTheme.primaryText)
+                if let message {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(BudgetTheme.tertiaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let action {
+                    Button(action.title, action: action.handler)
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(BudgetTheme.forest)
+                        .padding(.top, 4)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .contain)
+    }
+}
+
+struct BudgetLoading: View {
+    let title: LocalizedStringKey
+
+    init(_ title: LocalizedStringKey) {
+        self.title = title
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ProgressView()
+                .tint(BudgetTheme.forest)
+            Text(title)
+                .font(.subheadline)
+                .foregroundStyle(BudgetTheme.secondaryText)
+            Spacer(minLength: 0)
+        }
+    }
+}
+
+struct BudgetUsageStateLabel: View {
+    let state: BudgetUsageState
+
+    var body: some View {
+        BudgetChip(text: title, systemImage: systemImage, color: budgetUsageColor(state))
+    }
+
+    private var title: LocalizedStringKey {
+        switch state {
+        case .noTarget: "No target"
+        case .onTrack: "On track"
+        case .overspent: "Over plan"
+        case .refundCredit: "Refund credit"
+        }
+    }
+
+    private var systemImage: String {
+        switch state {
+        case .noTarget: "minus"
+        case .onTrack: "checkmark"
+        case .overspent: "exclamationmark"
+        case .refundCredit: "arrow.uturn.backward"
+        }
+    }
+}
+
+func budgetUsageColor(_ state: BudgetUsageState) -> Color {
+    switch state {
+    case .noTarget: BudgetTheme.secondaryText
+    case .onTrack: BudgetTheme.positive
+    case .overspent: BudgetTheme.over
+    case .refundCredit: BudgetTheme.sage
+    }
+}
+
+/// The one filled button in the app.
+struct BudgetPrimaryButtonStyle: ButtonStyle {
+    var isEnabled = true
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(
+                isEnabled ? BudgetTheme.forest : BudgetTheme.forest.opacity(0.3),
+                in: RoundedRectangle(cornerRadius: BudgetTheme.Radius.small, style: .continuous)
+            )
+            .opacity(configuration.isPressed ? 0.82 : 1)
+    }
 }
 
 private func dateOnly(_ date: Date) -> String {
@@ -707,15 +851,6 @@ private func dateOnly(_ date: Date) -> String {
         components.month ?? 0,
         components.day ?? 0
     )
-}
-
-private func displayDate(_ value: String) -> String {
-    let parts = value.split(separator: "-").compactMap { Int($0) }
-    guard parts.count == 3,
-          let date = Calendar(identifier: .gregorian).date(
-            from: DateComponents(year: parts[0], month: parts[1], day: parts[2])
-          ) else { return value }
-    return date.formatted(.dateTime.year().month(.abbreviated).day())
 }
 
 private func categoryDepth(

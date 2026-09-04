@@ -303,7 +303,7 @@ func createBudgetTransaction(
 			{AccountID: accountID, AmountMinor: amount, BaseAmountMinor: &amount},
 		},
 		Allocations: []transactiondomain.AllocationInput{
-			{CategoryID: categoryID, AmountBaseMinor: amount},
+			{CategoryID: categoryID, AmountBaseMinor: &amount},
 		},
 	})
 	if err != nil {

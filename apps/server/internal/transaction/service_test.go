@@ -130,8 +130,8 @@ func TestCreateSplitAndTransferReconciliation(t *testing.T) {
 		Kind: KindStandard, Status: StatusPending, TransactionDate: testDate,
 		Entries: []EntryInput{{AccountID: testAccountID, AmountMinor: -150000}},
 		Allocations: []AllocationInput{
-			{CategoryID: testCategoryID, AmountBaseMinor: -100000},
-			{CategoryID: testCategoryID, AmountBaseMinor: -50000},
+			{CategoryID: testCategoryID, AmountBaseMinor: allocationAmountOf(-100000)},
+			{CategoryID: testCategoryID, AmountBaseMinor: allocationAmountOf(-50000)},
 		},
 	}); err != nil {
 		t.Fatalf("Create(split) error = %v", err)
@@ -144,6 +144,63 @@ func TestCreateSplitAndTransferReconciliation(t *testing.T) {
 		},
 	}); err != nil {
 		t.Fatalf("Create(transfer) error = %v", err)
+	}
+}
+
+func allocationAmountOf(value int64) *int64 { return &value }
+
+// A chosen category must not oblige a client to restate a figure the server has just computed.
+// The foreign-currency case is the one that matters: the client cannot know the transaction
+// date's booking rate, so it states the category and nothing else.
+func TestCreateDerivesLoneAllocationAmountFromEntries(t *testing.T) {
+	repository := &transactionRepositoryStub{
+		accountCurrencies: map[string]money.Currency{testAccountID: money.USD},
+		categoryExists:    true,
+	}
+	service := newTransactionService(repository, &bookingStub{})
+	created, err := service.Create(context.Background(), testWorkspaceID, testUserID, WriteInput{
+		Kind: KindStandard, Status: StatusPosted, TransactionDate: testDate,
+		Entries:     []EntryInput{{AccountID: testAccountID, AmountMinor: 100}},
+		Allocations: []AllocationInput{{CategoryID: testCategoryID}},
+	})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if len(created.Allocations) != 1 || created.Allocations[0].CategoryID != testCategoryID ||
+		created.Allocations[0].AmountBaseMinor != 5000 {
+		t.Fatalf("allocations = %+v", created.Allocations)
+	}
+	if created.Entries[0].BaseAmountMinor != 5000 {
+		t.Fatalf("entries = %+v", created.Entries)
+	}
+}
+
+// Dividing a transaction between categories is the client's decision, so a split that omits an
+// amount is rejected rather than guessed at, and a stated zero stays invalid.
+func TestCreateRejectsDerivedAmountOnSplitAndZeroAllocation(t *testing.T) {
+	repository := &transactionRepositoryStub{
+		accountCurrencies: map[string]money.Currency{testAccountID: money.TRY},
+		categoryExists:    true,
+	}
+	service := newTransactionService(repository, nil)
+	_, err := service.Create(context.Background(), testWorkspaceID, testUserID, WriteInput{
+		Kind: KindStandard, Status: StatusPosted, TransactionDate: testDate,
+		Entries: []EntryInput{{AccountID: testAccountID, AmountMinor: -150000}},
+		Allocations: []AllocationInput{
+			{CategoryID: testCategoryID, AmountBaseMinor: allocationAmountOf(-100000)},
+			{CategoryID: testCategoryID},
+		},
+	})
+	if !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("Create(split) error = %v, want ErrInvalidInput", err)
+	}
+	_, err = service.Create(context.Background(), testWorkspaceID, testUserID, WriteInput{
+		Kind: KindStandard, Status: StatusPosted, TransactionDate: testDate,
+		Entries:     []EntryInput{{AccountID: testAccountID, AmountMinor: -150000}},
+		Allocations: []AllocationInput{{CategoryID: testCategoryID, AmountBaseMinor: allocationAmountOf(0)}},
+	})
+	if !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("Create(zero) error = %v, want ErrInvalidInput", err)
 	}
 }
 

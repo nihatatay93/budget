@@ -52,6 +52,40 @@ struct ContractMirrorTests {
         #expect(app == contract)
     }
 
+    @Test("Every app category appearance enum is accepted by the generated contract")
+    func categoryAppearanceVocabularyMatches() {
+        #expect(
+            Set(BudgetCategoryIconType.allCases.map(\.rawValue))
+                == Set(Components.Schemas.CategoryIconType.allCases.map(\.rawValue))
+        )
+        #expect(
+            Set(BudgetCategoryColorKey.allCases.map(\.rawValue))
+                == Set(Components.Schemas.CategoryColorKey.allCases.map(\.rawValue))
+        )
+    }
+
+    /// The granularity a client sends becomes a SQL bucket width on the server, so an
+    /// unmatched member is not merely unreachable: it is a value the request would carry and
+    /// the query could not use.
+    @Test("Every analysis granularity matches the contract and carries both word forms")
+    func analysisGranularitiesMatch() {
+        let app = Set(BudgetAnalysisGranularity.allCases.map(\.rawValue))
+        let contract = Set(Components.Schemas.AnalysisGranularity.allCases.map(\.rawValue))
+        #expect(app == contract)
+        for granularity in BudgetAnalysisGranularity.allCases {
+            // A missing entry would render the raw key on a control or inside a sentence.
+            #expect(granularity.title != "analysis.granularity.\(granularity.rawValue)")
+            #expect(granularity.noun != "analysis.bucket.\(granularity.rawValue)")
+        }
+    }
+
+    @Test("Every analysis range preset carries a title")
+    func analysisRangePresetsAreNamed() {
+        for preset in AnalysisRangePreset.allCases {
+            #expect(preset.title != "analysis.range.\(preset.rawValue)")
+        }
+    }
+
     @Test("Transaction kinds and statuses match the contract")
     func transactionVocabularyMatches() {
         #expect(

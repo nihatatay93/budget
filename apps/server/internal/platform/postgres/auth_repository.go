@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/nihatatay93/budget/internal/auth"
+	"github.com/nihatatay93/budget/internal/category"
 	"github.com/nihatatay93/budget/internal/platform/postgres/sqlc"
 )
 
@@ -62,11 +63,31 @@ func (r *AuthRepository) Register(ctx context.Context, registration auth.Registr
 	if err := r.createSystemCategories(ctx, queries, workspaceID, registration); err != nil {
 		return err
 	}
+	if err := createPredefinedCategories(ctx, queries, workspaceID); err != nil {
+		return err
+	}
 	if err := createSession(ctx, queries, registration.Session); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit registration: %w", err)
+	}
+	return nil
+}
+
+func createPredefinedCategories(ctx context.Context, queries *sqlc.Queries, workspaceID pgtype.UUID) error {
+	for _, value := range category.PredefinedCategories() {
+		if err := queries.CreatePredefinedCategory(ctx, sqlc.CreatePredefinedCategoryParams{
+			WorkspaceID: workspaceID, Name: value.Key, Kind: string(value.Kind),
+			PredefinedKey: pgtype.Text{String: value.Key, Valid: true},
+			ParentKey:     pgtype.Text{String: value.ParentKey, Valid: value.ParentKey != ""},
+			Icon:          pgtype.Text{String: value.Appearance.IconValue, Valid: true},
+			IconType:      string(value.Appearance.IconType),
+			IconValue:     value.Appearance.IconValue,
+			ColorKey:      value.Appearance.ColorKey,
+		}); err != nil {
+			return fmt.Errorf("create predefined category %s: %w", value.Key, err)
+		}
 	}
 	return nil
 }

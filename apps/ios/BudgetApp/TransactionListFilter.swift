@@ -6,7 +6,7 @@ enum TransactionStatusScope: String, CaseIterable, Identifiable {
     case pending
 
     var id: Self { self }
-    var title: String { rawValue.capitalized }
+    var title: String { L10n.text("transaction.scope.status.\(rawValue)") }
 
     func includes(_ status: BudgetTransactionStatus) -> Bool {
         switch self {
@@ -25,14 +25,7 @@ enum TransactionKindScope: String, CaseIterable, Identifiable {
 
     var id: Self { self }
 
-    var title: String {
-        switch self {
-        case .all: "All kinds"
-        case .standard: "Expense or income"
-        case .transfer: "Transfers"
-        case .adjustment: "Adjustments"
-        }
-    }
+    var title: String { L10n.text("transaction.scope.kind.\(rawValue)") }
 
     func includes(_ kind: BudgetTransactionKind) -> Bool {
         switch self {
@@ -77,8 +70,18 @@ struct TransactionListFilter {
             + transaction.entries.compactMap { accountNames[$0.accountID] }
             + transaction.allocations.compactMap { categoryNames[$0.categoryID] }
 
+        // `localizedCaseInsensitiveContains` folds case with the current locale. Under Turkish
+        // that maps "I" to dotless "ı", so searching "GROCERIES" stops matching "groceries" —
+        // and searching "istanbul" stops matching "İstanbul". A search box wants the opposite:
+        // passing `locale: nil` folds case invariantly, and folding diacritics too lets someone
+        // type without Turkish characters and still find the row.
         return searchableValues.contains {
-            $0.localizedCaseInsensitiveContains(query)
+            $0.range(
+                of: query,
+                options: [.caseInsensitive, .diacriticInsensitive],
+                range: nil,
+                locale: nil
+            ) != nil
         }
     }
 }

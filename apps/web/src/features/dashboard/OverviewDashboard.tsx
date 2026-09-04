@@ -15,6 +15,7 @@ import {
   transactionsQueryKey,
 } from "../../api/client";
 import { AppIcon } from "../../components/ExperiencePrimitives";
+import { CategoryLabel } from "../../components/CategoryAppearance";
 import {
   EmptyState,
   InlineNotice,
@@ -25,6 +26,7 @@ import {
   SurfaceCard,
 } from "../../components/Presentation";
 import { type Currency, formatMoney } from "../../lib/currency";
+import { categoryName, t } from "../../lib/i18n";
 import { monthLabel, workspaceMonth } from "../../lib/month";
 
 type Workspace = SessionResponse["workspaces"][number];
@@ -53,11 +55,11 @@ export function OverviewDashboard({
 
   if (projection.isPending) {
     return (
-      <div className="overview-dashboard" aria-label="Loading overview">
-        <LoadingState label="Loading financial overview" rows={4} />
+      <div className="overview-dashboard" aria-label={t("Loading overview")}>
+        <LoadingState label={t("Loading financial overview")} rows={4} />
         <div className="overview-loading-grid">
-          <LoadingState label="Loading monthly plan" rows={3} />
-          <LoadingState label="Loading recent activity" rows={3} />
+          <LoadingState label={t("Loading monthly plan")} rows={3} />
+          <LoadingState label={t("Loading recent activity")} rows={3} />
         </div>
       </div>
     );
@@ -66,13 +68,13 @@ export function OverviewDashboard({
   if (projection.isError) {
     return (
       <InlineNotice
-        action={<button className="secondary-button" onClick={() => void projection.refetch()} type="button">Try again</button>}
-        title="Overview unavailable"
+        action={<button className="secondary-button" onClick={() => void projection.refetch()} type="button">{t("Try again")}</button>}
+        title={t("Overview unavailable")}
         tone="danger"
       >
         {projection.error instanceof APIError
           ? projection.error.message
-          : "Your financial overview could not be loaded."}
+          : t("Your financial overview could not be loaded.")}
       </InlineNotice>
     );
   }
@@ -113,7 +115,7 @@ function OverviewSummary({ projection }: { projection: FinancialProjection }) {
       <article className="overview-balance-card">
         <div className="overview-card-heading">
           <div>
-            <p>Posted balance</p>
+            <p>{t("Posted balance")}</p>
             <span>{formatDateRange(period.from_date, period.to_date)}</span>
           </div>
           <StatusBadge tone="positive">{period.base_currency}</StatusBadge>
@@ -122,23 +124,23 @@ function OverviewSummary({ projection }: { projection: FinancialProjection }) {
           <MoneyAmount amount={summary.balance_base_minor.posted} currency={period.base_currency} emphasis="hero" />
         </h2>
         <div className="overview-balance-context">
-          <span>Pending delta</span>
+          <span>{t("Pending delta")}</span>
           <MoneyAmount amount={pending} currency={period.base_currency} signed />
-          <span>Projected</span>
+          <span>{t("Projected")}</span>
           <MoneyAmount amount={summary.balance_base_minor.projected} currency={period.base_currency} />
         </div>
       </article>
       <SummaryTile
         amount={summary.income_base_minor.posted}
         currency={period.base_currency}
-        label="Income"
+        label={t("Income")}
         pending={summary.income_base_minor.pending}
         tone="income"
       />
       <SummaryTile
         amount={summary.spending_base_minor.posted}
         currency={period.base_currency}
-        label="Spending"
+        label={t("Spending")}
         pending={summary.spending_base_minor.pending}
         tone="spending"
       />
@@ -169,7 +171,7 @@ function SummaryTile({
       </div>
       <MoneyAmount amount={amount} currency={currency} emphasis="hero" />
       <small>
-        {pending === 0 ? "No pending activity" : `${formatMoney(pending, currency)} pending`}
+        {pending === 0 ? t("No pending activity") : t("{amount} pending", { amount: formatMoney(pending, currency) })}
       </small>
     </article>
   );
@@ -188,10 +190,10 @@ function QuickActions({ canManage, workspaceId }: { canManage: boolean; workspac
         { to: "accounts", icon: "accounts" as const, label: "View accounts" },
       ];
   return (
-    <nav className="overview-quick-actions" aria-label="Overview actions">
+    <nav className="overview-quick-actions" aria-label={t("Overview actions")}>
       {actions.map((action) => (
         <Link key={action.to} to={`/workspaces/${workspaceId}/${action.to}`}>
-          <span><AppIcon name={action.icon} /></span>{action.label}
+          <span><AppIcon name={action.icon} /></span>{t(action.label)}
         </Link>
       ))}
     </nav>
@@ -215,20 +217,20 @@ function BudgetSnapshot({
   return (
     <SurfaceCard className="overview-panel" labelledBy="overview-budget-heading">
       <PanelHeading
-        eyebrow={`${monthLabel(month)} plan`}
-        link="Open budget"
+        eyebrow={t("{month} plan", { month: monthLabel(month) })}
+        link={t("Open budget")}
         linkTo={`/workspaces/${workspaceId}/budget`}
-        title="Monthly budget"
+        title={t("Monthly budget")}
         titleId="overview-budget-heading"
       />
-      {isPending ? <LoadingState label="Loading monthly budget" rows={3} /> : null}
+      {isPending ? <LoadingState label={t("Loading monthly budget")} rows={3} /> : null}
       {error && !missing ? <InlineNotice tone="danger">{error.message}</InlineNotice> : null}
       {missing ? (
         <EmptyState
-          action={<Link to={`/workspaces/${workspaceId}/budget`}>Create plan</Link>}
-          description="Set category targets to compare your posted spending with a plan."
+          action={<Link to={`/workspaces/${workspaceId}/budget`}>{t("Create plan")}</Link>}
+          description={t("Set category targets to compare your posted spending with a plan.")}
           icon="budget"
-          title="No plan for this month"
+          title={t("No plan for this month")}
         />
       ) : null}
       {budget ? <BudgetContent budget={budget} /> : null}
@@ -245,20 +247,20 @@ function BudgetContent({ budget }: { budget: MonthlyBudget }) {
     <div className="overview-budget-content">
       <div className="overview-budget-total">
         <div>
-          <span>Used</span>
+          <span>{t("Used")}</span>
           <MoneyAmount amount={budget.used_base_minor} currency={budget.base_currency} />
         </div>
         <div>
-          <span>Remaining</span>
+          <span>{t("Remaining")}</span>
           <MoneyAmount amount={budget.remaining_base_minor} currency={budget.base_currency} />
         </div>
       </div>
-      <ProgressMeter label="Current monthly budget usage" tone={tone} value={percent} />
-      <p>of {formatMoney(budget.planned_base_minor, budget.base_currency)} planned</p>
+      <ProgressMeter label={t("Current monthly budget usage")} tone={tone} value={percent} />
+      <p>{t("of {amount} planned", { amount: formatMoney(budget.planned_base_minor, budget.base_currency) })}</p>
       <div className="overview-budget-items">
         {budget.items.slice(0, 3).map((item) => (
           <div key={item.id}>
-            <span>{item.category_icon ? `${item.category_icon} ` : ""}{item.category_name}</span>
+            <CategoryLabel colorKey={item.category_color_key} iconType={item.category_icon_type} iconValue={item.category_icon_value ?? item.category_icon} name={categoryName({ name: item.category_name, predefined_key: item.category_predefined_key })} />
             <strong>{formatMoney(item.used_base_minor, budget.base_currency)}</strong>
           </div>
         ))}
@@ -286,16 +288,16 @@ function RecentActivity({
   return (
     <SurfaceCard className="overview-panel" labelledBy="overview-activity-heading">
       <PanelHeading
-        eyebrow="Latest ledger activity"
-        link="View all"
+        eyebrow={t("Latest ledger activity")}
+        link={t("View all")}
         linkTo={`/workspaces/${workspaceId}/transactions`}
-        title="Recent transactions"
+        title={t("Recent transactions")}
         titleId="overview-activity-heading"
       />
-      {isPending ? <LoadingState label="Loading recent transactions" rows={4} /> : null}
+      {isPending ? <LoadingState label={t("Loading recent transactions")} rows={4} /> : null}
       {error ? <InlineNotice tone="danger">{error.message}</InlineNotice> : null}
       {!isPending && !error && recent.length === 0 ? (
-        <EmptyState compact icon="transactions" title="No transactions yet" />
+        <EmptyState compact icon="transactions" title={t("No transactions yet")} />
       ) : null}
       <div className="overview-transaction-list">
         {recent.map((transaction) => (
@@ -305,11 +307,11 @@ function RecentActivity({
             </span>
             <div>
               <strong>{transaction.payee ?? transaction.description ?? transactionLabel(transaction.kind)}</strong>
-              <small>{formatDate(transaction.transaction_date)} · {transaction.status}</small>
+              <small>{formatDate(transaction.transaction_date)} · {t(transaction.status === "pending" ? "Pending" : "Posted")}</small>
             </div>
             <div className="overview-transaction-amount">
               {transaction.kind === "transfer" ? (
-                <span>Transfer</span>
+                <span>{t("Transfer")}</span>
               ) : (
                 <MoneyAmount amount={transactionTotal(transaction)} currency={currency} signed />
               )}
@@ -328,21 +330,21 @@ function AccountHighlights({ projection, workspaceId }: { projection: FinancialP
   return (
     <SurfaceCard className="overview-panel" labelledBy="overview-accounts-heading">
       <PanelHeading
-        eyebrow="Cumulative balances"
-        link="Manage"
+        eyebrow={t("Cumulative balances")}
+        link={t("Manage")}
         linkTo={`/workspaces/${workspaceId}/accounts`}
-        title="Accounts"
+        title={t("Accounts")}
         titleId="overview-accounts-heading"
       />
-      {accounts.length === 0 ? <EmptyState compact icon="accounts" title="No accounts yet" /> : null}
+      {accounts.length === 0 ? <EmptyState compact icon="accounts" title={t("No accounts yet")} /> : null}
       <div className="overview-highlight-list">
         {accounts.map((account) => (
           <article key={account.id}>
-            <div><strong>{account.name}</strong><small>{account.type.replaceAll("_", " ")}</small></div>
+            <div><strong>{account.name}</strong><small>{t(`account.type.${account.type}`)}</small></div>
             <div>
               <MoneyAmount amount={account.native_balance_minor.posted} currency={account.currency} />
               {account.currency !== projection.period.base_currency ? (
-                <small>{formatMoney(account.base_balance_minor.posted, projection.period.base_currency)} base</small>
+                <small>{t("{amount} base", { amount: formatMoney(account.base_balance_minor.posted, projection.period.base_currency) })}</small>
               ) : null}
             </div>
           </article>
@@ -361,22 +363,22 @@ function CategoryHighlights({ projection, workspaceId }: { projection: Financial
   return (
     <SurfaceCard className="overview-panel" labelledBy="overview-categories-heading">
       <PanelHeading
-        eyebrow="This period"
-        link="Open reports"
+        eyebrow={t("This period")}
+        link={t("Open reports")}
         linkTo={`/workspaces/${workspaceId}/reports`}
-        title="Top spending"
+        title={t("Top spending")}
         titleId="overview-categories-heading"
       />
-      {categories.length === 0 ? <EmptyState compact icon="categories" title="No posted spending yet" /> : null}
+      {categories.length === 0 ? <EmptyState compact icon="categories" title={t("No posted spending yet")} /> : null}
       <div className="overview-category-list">
         {categories.map((category) => (
           <article key={category.id}>
             <div>
-              <span>{category.icon ? `${category.icon} ` : ""}{category.name}</span>
+              <CategoryLabel colorKey={category.color_key} iconType={category.icon_type} iconValue={category.icon_value ?? category.icon} name={categoryName(category)} />
               <MoneyAmount amount={category.rolled_up_base_minor.posted} currency={projection.period.base_currency} />
             </div>
             <ProgressMeter
-              label={`${category.name} relative spending`}
+              label={t("{category} relative spending", { category: categoryName(category) })}
               max={max}
               value={Math.max(0, category.rolled_up_base_minor.posted)}
             />
@@ -425,7 +427,7 @@ function transactionDirection(transaction: Transaction) {
 }
 
 function transactionLabel(kind: Transaction["kind"]) {
-  return kind === "standard" ? "Transaction" : kind === "transfer" ? "Transfer" : "Adjustment";
+  return kind === "standard" ? t("Transaction") : kind === "transfer" ? t("Transfer") : t("Adjustment");
 }
 
 function formatDate(value: string) {

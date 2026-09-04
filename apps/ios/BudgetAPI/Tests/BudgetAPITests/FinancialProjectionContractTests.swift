@@ -29,6 +29,9 @@ final class FinancialProjectionContractTests: XCTestCase {
             "id": "0198bdc8-d73e-7b28-bd8e-4f29d4f4b97e",
             "name": "Food",
             "kind": "expense",
+            "icon_type": "system",
+            "icon_value": "ellipsis",
+            "color_key": "slate",
             "direct_base_minor": {"posted": 1300, "pending": -100, "projected": 1200},
             "rolled_up_base_minor": {"posted": 1300, "pending": -100, "projected": 1200}
           }]

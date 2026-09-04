@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 
 import { APIError, type SessionResponse, getSession, sessionQueryKey } from "../api/client";
 import { AppStatus } from "../components/ExperiencePrimitives";
+import { t } from "../lib/i18n";
 import { DashboardPage } from "../pages/DashboardPage";
 import { LoginPage } from "../pages/LoginPage";
 import { RegisterPage } from "../pages/RegisterPage";
@@ -17,9 +18,9 @@ export function App() {
   if (session.isPending) {
     return (
       <AppStatus
-        description="Restoring your secure session and preparing your financial workspace."
-        eyebrow="Private personal finance"
-        title="Opening Budget"
+        description={t("Restoring your secure session and preparing your financial workspace.")}
+        eyebrow={t("Private personal finance")}
+        title={t("Opening Budget")}
       />
     );
   }
@@ -31,12 +32,12 @@ export function App() {
       <AppStatus
         action={(
           <button type="button" onClick={() => void session.refetch()}>
-            Try again
+            {t("Try again")}
           </button>
         )}
         description={session.error.message}
-        eyebrow="Connection problem"
-        title="Budget is unavailable"
+        eyebrow={t("Connection problem")}
+        title={t("Budget is unavailable")}
         tone="error"
       />
     );

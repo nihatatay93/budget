@@ -75,6 +75,7 @@ budget-dev/
 │   │   │   ├── category/
 │   │   │   ├── budget/
 │   │   │   ├── reporting/
+│   │   │   ├── analysis/
 │   │   │   ├── api/
 │   │   │   ├── webui/
 │   │   │   ├── platform/
@@ -250,6 +251,7 @@ apps/server/internal/
 ├── category/
 ├── budget/
 ├── reporting/
+├── analysis/
 ├── api/
 ├── webui/
 ├── platform/
@@ -365,6 +367,7 @@ Typical route shape:
 /v1/workspaces/{workspaceId}/transactions
 /v1/workspaces/{workspaceId}/categories
 /v1/workspaces/{workspaceId}/financial-projection
+/v1/workspaces/{workspaceId}/spending-analysis
 /v1/workspaces/{workspaceId}/budgets
 ```
 
@@ -392,6 +395,18 @@ from allocations without persisting authoritative dashboard totals. Posted figur
 separate from pending projections, and all parts of one response observe a consistent
 PostgreSQL snapshot. Projection reads are available to every workspace member. See
 [ADR 0007](decisions/0007-derive-financial-projections-from-the-ledger.md).
+
+Spending analysis is a second derived read model, owned by the `analysis` capability and
+kept separate from `reporting` because it answers a different question. Reporting states one
+period's position, including what has not settled yet; analysis describes settled behaviour
+over time and compares it with the equal-length window immediately before. Every analysis
+figure is therefore posted-only, and one request returns the time series, the category
+breakdown, the weekday and daily distributions, the payee ranking, and per-account activity
+from a single consistent snapshot so no two panels can disagree. Bucket width is a bounded
+enum the transport and the domain both validate, because it becomes a SQL bucket width.
+Analysis reads are available to every workspace member. Both the web and iOS clients consume
+this one endpoint and apply the same window, ranking, and comparison rules, so a period reads
+identically on either. See [ADR 0011](decisions/0011-analyze-posted-spending-over-time.md).
 
 Collaboration administration uses a stricter role boundary than ordinary financial writes.
 Every active member may read the member roster. Owners manage all permitted invitation roles

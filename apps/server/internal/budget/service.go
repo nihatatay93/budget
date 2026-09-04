@@ -91,7 +91,11 @@ type ItemSnapshot struct {
 	ID                        string
 	CategoryID                string
 	CategoryName              string
+	CategoryPredefinedKey     *string
 	CategoryIcon              *string
+	CategoryIconType          string
+	CategoryIconValue         string
+	CategoryColorKey          string
 	CategoryArchivedAt        *time.Time
 	PlannedBaseMinor          int64
 	SignedAllocationBaseMinor int64
@@ -110,14 +114,18 @@ type Snapshot struct {
 }
 
 type Item struct {
-	ID                 string
-	CategoryID         string
-	CategoryName       string
-	CategoryIcon       *string
-	CategoryArchivedAt *time.Time
-	PlannedBaseMinor   int64
-	UsedBaseMinor      int64
-	RemainingBaseMinor int64
+	ID                    string
+	CategoryID            string
+	CategoryName          string
+	CategoryPredefinedKey *string
+	CategoryIcon          *string
+	CategoryIconType      string
+	CategoryIconValue     string
+	CategoryColorKey      string
+	CategoryArchivedAt    *time.Time
+	PlannedBaseMinor      int64
+	UsedBaseMinor         int64
+	RemainingBaseMinor    int64
 }
 
 type Budget struct {
@@ -364,8 +372,11 @@ func buildBudget(snapshot Snapshot, workspaceID string, month Month) (Budget, er
 		}
 		result.Items = append(result.Items, Item{
 			ID: value.ID, CategoryID: value.CategoryID, CategoryName: value.CategoryName,
-			CategoryIcon: value.CategoryIcon, CategoryArchivedAt: value.CategoryArchivedAt,
-			PlannedBaseMinor: value.PlannedBaseMinor, UsedBaseMinor: used,
+			CategoryPredefinedKey: value.CategoryPredefinedKey,
+			CategoryIcon:          value.CategoryIcon, CategoryIconType: value.CategoryIconType,
+			CategoryIconValue: value.CategoryIconValue, CategoryColorKey: value.CategoryColorKey,
+			CategoryArchivedAt: value.CategoryArchivedAt,
+			PlannedBaseMinor:   value.PlannedBaseMinor, UsedBaseMinor: used,
 			RemainingBaseMinor: remaining,
 		})
 		if err := add(&result.PlannedBaseMinor, value.PlannedBaseMinor); err != nil {

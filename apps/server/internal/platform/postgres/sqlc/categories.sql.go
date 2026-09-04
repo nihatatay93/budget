@@ -98,9 +98,9 @@ func (q *Queries) CategoryHasChildren(ctx context.Context, arg CategoryHasChildr
 
 const createCategory = `-- name: CreateCategory :exec
 INSERT INTO categories (
-    id, workspace_id, parent_id, name, kind, icon
+    id, workspace_id, parent_id, name, kind, icon, icon_type, icon_value, color_key
 ) VALUES (
-    $1, $2, $3, $4, $5, $6
+    $1, $2, $3, $4, $5, $6, $7, $8, $9
 )
 `
 
@@ -111,6 +111,9 @@ type CreateCategoryParams struct {
 	Name        string      `json:"name"`
 	Kind        string      `json:"kind"`
 	Icon        pgtype.Text `json:"icon"`
+	IconType    string      `json:"icon_type"`
+	IconValue   string      `json:"icon_value"`
+	ColorKey    string      `json:"color_key"`
 }
 
 func (q *Queries) CreateCategory(ctx context.Context, arg CreateCategoryParams) error {
@@ -121,6 +124,60 @@ func (q *Queries) CreateCategory(ctx context.Context, arg CreateCategoryParams) 
 		arg.Name,
 		arg.Kind,
 		arg.Icon,
+		arg.IconType,
+		arg.IconValue,
+		arg.ColorKey,
+	)
+	return err
+}
+
+const createPredefinedCategory = `-- name: CreatePredefinedCategory :exec
+INSERT INTO categories (
+    workspace_id, parent_id, name, kind, predefined_key, icon, icon_type, icon_value, color_key
+) VALUES (
+    $1,
+    CASE WHEN $9::TEXT IS NULL THEN NULL ELSE (
+        SELECT parent.id FROM categories parent
+        WHERE parent.workspace_id = $1 AND parent.predefined_key = $9::TEXT
+    ) END,
+    $2, $3, $4, $5, $6, $7, $8
+)
+ON CONFLICT (workspace_id, predefined_key) WHERE predefined_key IS NOT NULL DO UPDATE
+SET parent_id = COALESCE(categories.parent_id, EXCLUDED.parent_id),
+    icon = EXCLUDED.icon,
+    icon_type = EXCLUDED.icon_type,
+    icon_value = EXCLUDED.icon_value,
+    color_key = EXCLUDED.color_key,
+    updated_at = now()
+`
+
+type CreatePredefinedCategoryParams struct {
+	WorkspaceID   pgtype.UUID `json:"workspace_id"`
+	Name          string      `json:"name"`
+	Kind          string      `json:"kind"`
+	PredefinedKey pgtype.Text `json:"predefined_key"`
+	Icon          pgtype.Text `json:"icon"`
+	IconType      string      `json:"icon_type"`
+	IconValue     string      `json:"icon_value"`
+	ColorKey      string      `json:"color_key"`
+	ParentKey     pgtype.Text `json:"parent_key"`
+}
+
+// A member resolves its group by predefined key inside its own workspace, so seeding never
+// has to carry identifiers between statements. Groups are inserted before their members.
+// The conflict clause refreshes server-owned appearance but only fills in a parent that is
+// still absent, so a workspace that has rearranged its own hierarchy keeps that arrangement.
+func (q *Queries) CreatePredefinedCategory(ctx context.Context, arg CreatePredefinedCategoryParams) error {
+	_, err := q.db.Exec(ctx, createPredefinedCategory,
+		arg.WorkspaceID,
+		arg.Name,
+		arg.Kind,
+		arg.PredefinedKey,
+		arg.Icon,
+		arg.IconType,
+		arg.IconValue,
+		arg.ColorKey,
+		arg.ParentKey,
 	)
 	return err
 }
@@ -133,7 +190,11 @@ SELECT
     name,
     kind,
     system_key,
+    predefined_key,
     icon,
+    icon_type,
+    icon_value,
+    color_key,
     archived_at
 FROM categories
 WHERE workspace_id = $1
@@ -146,14 +207,18 @@ type GetCategoryParams struct {
 }
 
 type GetCategoryRow struct {
-	ID          pgtype.UUID        `json:"id"`
-	WorkspaceID pgtype.UUID        `json:"workspace_id"`
-	ParentID    pgtype.UUID        `json:"parent_id"`
-	Name        string             `json:"name"`
-	Kind        string             `json:"kind"`
-	SystemKey   pgtype.Text        `json:"system_key"`
-	Icon        pgtype.Text        `json:"icon"`
-	ArchivedAt  pgtype.Timestamptz `json:"archived_at"`
+	ID            pgtype.UUID        `json:"id"`
+	WorkspaceID   pgtype.UUID        `json:"workspace_id"`
+	ParentID      pgtype.UUID        `json:"parent_id"`
+	Name          string             `json:"name"`
+	Kind          string             `json:"kind"`
+	SystemKey     pgtype.Text        `json:"system_key"`
+	PredefinedKey pgtype.Text        `json:"predefined_key"`
+	Icon          pgtype.Text        `json:"icon"`
+	IconType      string             `json:"icon_type"`
+	IconValue     string             `json:"icon_value"`
+	ColorKey      string             `json:"color_key"`
+	ArchivedAt    pgtype.Timestamptz `json:"archived_at"`
 }
 
 func (q *Queries) GetCategory(ctx context.Context, arg GetCategoryParams) (GetCategoryRow, error) {
@@ -166,7 +231,11 @@ func (q *Queries) GetCategory(ctx context.Context, arg GetCategoryParams) (GetCa
 		&i.Name,
 		&i.Kind,
 		&i.SystemKey,
+		&i.PredefinedKey,
 		&i.Icon,
+		&i.IconType,
+		&i.IconValue,
+		&i.ColorKey,
 		&i.ArchivedAt,
 	)
 	return i, err
@@ -180,7 +249,11 @@ SELECT
     name,
     kind,
     system_key,
+    predefined_key,
     icon,
+    icon_type,
+    icon_value,
+    color_key,
     archived_at
 FROM categories
 WHERE workspace_id = $1
@@ -194,14 +267,18 @@ type ListCategoriesParams struct {
 }
 
 type ListCategoriesRow struct {
-	ID          pgtype.UUID        `json:"id"`
-	WorkspaceID pgtype.UUID        `json:"workspace_id"`
-	ParentID    pgtype.UUID        `json:"parent_id"`
-	Name        string             `json:"name"`
-	Kind        string             `json:"kind"`
-	SystemKey   pgtype.Text        `json:"system_key"`
-	Icon        pgtype.Text        `json:"icon"`
-	ArchivedAt  pgtype.Timestamptz `json:"archived_at"`
+	ID            pgtype.UUID        `json:"id"`
+	WorkspaceID   pgtype.UUID        `json:"workspace_id"`
+	ParentID      pgtype.UUID        `json:"parent_id"`
+	Name          string             `json:"name"`
+	Kind          string             `json:"kind"`
+	SystemKey     pgtype.Text        `json:"system_key"`
+	PredefinedKey pgtype.Text        `json:"predefined_key"`
+	Icon          pgtype.Text        `json:"icon"`
+	IconType      string             `json:"icon_type"`
+	IconValue     string             `json:"icon_value"`
+	ColorKey      string             `json:"color_key"`
+	ArchivedAt    pgtype.Timestamptz `json:"archived_at"`
 }
 
 func (q *Queries) ListCategories(ctx context.Context, arg ListCategoriesParams) ([]ListCategoriesRow, error) {
@@ -220,7 +297,11 @@ func (q *Queries) ListCategories(ctx context.Context, arg ListCategoriesParams) 
 			&i.Name,
 			&i.Kind,
 			&i.SystemKey,
+			&i.PredefinedKey,
 			&i.Icon,
+			&i.IconType,
+			&i.IconValue,
+			&i.ColorKey,
 			&i.ArchivedAt,
 		); err != nil {
 			return nil, err
@@ -239,9 +320,12 @@ SET parent_id = $1,
     name = $2,
     kind = $3,
     icon = $4,
+    icon_type = $5,
+    icon_value = $6,
+    color_key = $7,
     updated_at = now()
-WHERE workspace_id = $5
-  AND id = $6
+WHERE workspace_id = $8
+  AND id = $9
 `
 
 type UpdateCategoryParams struct {
@@ -249,6 +333,9 @@ type UpdateCategoryParams struct {
 	Name        string      `json:"name"`
 	Kind        string      `json:"kind"`
 	Icon        pgtype.Text `json:"icon"`
+	IconType    string      `json:"icon_type"`
+	IconValue   string      `json:"icon_value"`
+	ColorKey    string      `json:"color_key"`
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
 	ID          pgtype.UUID `json:"id"`
 }
@@ -259,6 +346,9 @@ func (q *Queries) UpdateCategory(ctx context.Context, arg UpdateCategoryParams) 
 		arg.Name,
 		arg.Kind,
 		arg.Icon,
+		arg.IconType,
+		arg.IconValue,
+		arg.ColorKey,
 		arg.WorkspaceID,
 		arg.ID,
 	)

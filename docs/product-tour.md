@@ -14,11 +14,11 @@ The primary destinations are:
   splits, transfers, adjustments, pending items, editing, and soft deletion.
 - **Budget** — a month-by-month category plan whose usage comes from posted allocations.
 - **Accounts** — native and base-currency balances with account creation, editing, and archival.
-- **More** — reports, categories, people, workspace switching, server details on iOS, and
-  session controls.
+- **More** — analysis, reports, categories, people, workspace switching, server details on
+  iOS, and session controls.
 
-On a wide browser window, a persistent workspace sidebar also exposes **Reports**,
-**Categories**, and **People** directly. On compact web layouts and iOS, the stable five-item
+On a wide browser window, a persistent workspace sidebar also exposes **Analysis**,
+**Reports**, **Categories**, and **People** directly. On compact web layouts and iOS, the stable five-item
 bottom navigation keeps the highest-frequency destinations within thumb reach and groups the
 remaining workspace tools under More.
 
@@ -58,6 +58,26 @@ Monthly plans set base-currency targets for expense categories. Usage includes o
 allocations, while refunds reduce net usage. Reports let you select a date range and inspect
 posted, pending, and projected account or category activity without maintaining a second set
 of totals.
+
+## Understand the pattern
+
+Analysis answers a different question from Reports. Where Reports states one period's
+position, Analysis describes settled behaviour over time, so every figure there is posted
+activity only.
+
+Pick a period — this month, a trailing few months, year to date — and the web client shows a
+spending and income trend at a day, week, or month bucket, a ranked category breakdown with
+each category's own trend, the weekday and daily rhythm of your spending, the payees you pay
+most, and which accounts the money moved through. Each period is compared with the equal-length
+period immediately before it, so "up 22%" always means the same thing, and a short list of
+plain-language observations names what the numbers already show.
+
+Transfers between your own accounts never count as spending anywhere in Analysis, and a refund
+reduces a category's total rather than appearing as a charge.
+
+iOS carries the same destination under More, drawn with Swift Charts rather than the web
+client's inline SVG. Both read the same contract, so a period selected on either client
+reports the same figures.
 
 ## Collaborate safely
 

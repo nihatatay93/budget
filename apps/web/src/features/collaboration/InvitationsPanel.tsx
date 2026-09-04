@@ -21,6 +21,7 @@ import {
   type ToastMessage,
 } from "../../components/Presentation";
 import { type InvitationRole, canListInvitations, invitableRoles } from "../../lib/workspace";
+import { roleLabel, t } from "../../lib/i18n";
 
 type Workspace = SessionResponse["workspaces"][number];
 
@@ -54,7 +55,7 @@ export function InvitationsPanel({ workspace }: { workspace: Workspace }) {
     onSuccess: async () => {
       setToasts([{
         id: `invitation-revoke-${revoking?.id ?? "complete"}`,
-        title: "Invitation revoked",
+        title: t("Invitation revoked"),
         tone: "positive",
       }]);
       setRevoking(undefined);
@@ -86,60 +87,60 @@ export function InvitationsPanel({ workspace }: { workspace: Workspace }) {
     <section className="people-panel invitations-panel" aria-labelledby="invitations-heading">
       <div className="people-panel-heading">
         <div>
-          <p className="eyebrow">Pending access</p>
-          <h2 id="invitations-heading">Invitations</h2>
+          <p className="eyebrow">{t("Pending access")}</p>
+          <h2 id="invitations-heading">{t("Invitations")}</h2>
         </div>
-        <button onClick={openEditor} type="button">Invite person</button>
+        <button onClick={openEditor} type="button">{t("Invite person")}</button>
       </div>
-      {query.isPending ? <LoadingState label="Loading workspace invitations" rows={3} /> : null}
+      {query.isPending ? <LoadingState label={t("Loading workspace invitations")} rows={3} /> : null}
       {query.isError ? (
         <InlineNotice
-          action={<button className="secondary-button" onClick={() => void query.refetch()} type="button">Try again</button>}
-          title="Invitations could not be loaded"
+          action={<button className="secondary-button" onClick={() => void query.refetch()} type="button">{t("Try again")}</button>}
+          title={t("Invitations could not be loaded")}
           tone="danger"
         >
           <p>{query.error.message}</p>
         </InlineNotice>
       ) : null}
       {!query.isPending && !query.isError && query.data?.length === 0 ? (
-        <EmptyState compact description="Create an invitation when someone needs access." icon="people" title="No pending invitations" />
+        <EmptyState compact description={t("Create an invitation when someone needs access.")} icon="people" title={t("No pending invitations")} />
       ) : null}
       <div className="invitation-list">
         {query.data?.map((invitation) => (
           <article className="invitation-row" key={invitation.id}>
             <div>
               <strong>{invitation.email}</strong>
-              <small>Invited by {invitation.inviter_display_name} · expires {new Date(invitation.expires_at).toLocaleDateString()}</small>
+              <small>{t("Invited by {name} · expires {date}", { name: invitation.inviter_display_name, date: new Date(invitation.expires_at).toLocaleDateString() })}</small>
             </div>
-            <StatusBadge>{invitation.role}</StatusBadge>
-            <button className="text-button danger" onClick={() => confirmRevoke(invitation)} type="button">Revoke</button>
+            <StatusBadge>{roleLabel(invitation.role)}</StatusBadge>
+            <button className="text-button danger" onClick={() => confirmRevoke(invitation)} type="button">{t("Revoke")}</button>
           </article>
         ))}
       </div>
       <ModalDialog
-        description="The acceptance code is shown once after creation and must be shared out of band."
+        description={t("The acceptance code is shown once after creation and must be shared out of band.")}
         footer={(
           <>
-            <button className="secondary-button" onClick={() => setEditorOpen(false)} type="button">Cancel</button>
+            <button className="secondary-button" onClick={() => setEditorOpen(false)} type="button">{t("Cancel")}</button>
             <button disabled={create.isPending} form="invitation-editor" type="submit">
-              {create.isPending ? "Creating…" : "Create invitation"}
+              {create.isPending ? t("Creating…") : t("Create invitation")}
             </button>
           </>
         )}
         onClose={() => setEditorOpen(false)}
         open={editorOpen}
         placement="drawer"
-        title="Invite someone"
+        title={t("Invite someone")}
       >
         <form className="resource-form resource-editor-form" id="invitation-editor" onSubmit={submit}>
           <label>
-            Email
+            {t("Email")}
             <input required type="email" maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} />
           </label>
           <label>
-            Role
+            {t("Role")}
             <select value={role} onChange={(event) => setRole(event.target.value as InvitationRole)}>
-              {roles.map((candidate) => <option key={candidate} value={candidate}>{candidate}</option>)}
+              {roles.map((candidate) => <option key={candidate} value={candidate}>{roleLabel(candidate)}</option>)}
             </select>
           </label>
           <MutationError mutation={create} />
@@ -147,23 +148,23 @@ export function InvitationsPanel({ workspace }: { workspace: Workspace }) {
       </ModalDialog>
       <IssuedInvitation issued={issued} onClose={() => setIssued(undefined)} />
       <ModalDialog
-        description={`${revoking?.email ?? "This person"} will no longer be able to use the pending acceptance code.`}
+        description={t("{person} will no longer be able to use the pending acceptance code.", { person: revoking?.email ?? t("This person") })}
         footer={(
           <>
-            <button className="secondary-button" onClick={() => setRevoking(undefined)} type="button">Cancel</button>
+            <button className="secondary-button" onClick={() => setRevoking(undefined)} type="button">{t("Cancel")}</button>
             <button
               className="danger-button"
               disabled={revoke.isPending}
               onClick={() => revoking && revoke.mutate(revoking.id)}
               type="button"
             >
-              {revoke.isPending ? "Revoking…" : "Revoke invitation"}
+              {revoke.isPending ? t("Revoking…") : t("Revoke invitation")}
             </button>
           </>
         )}
         onClose={() => setRevoking(undefined)}
         open={Boolean(revoking)}
-        title="Revoke invitation?"
+        title={t("Revoke invitation?")}
       >
         <MutationError mutation={revoke} />
       </ModalDialog>
@@ -181,17 +182,17 @@ function IssuedInvitation({
 }) {
   return (
     <ModalDialog
-      description="This credential cannot be retrieved after you close this message."
+      description={t("This credential cannot be retrieved after you close this message.")}
       dismissible={false}
-      footer={<button onClick={onClose} type="button">I saved the code</button>}
+      footer={<button onClick={onClose} type="button">{t("I saved the code")}</button>}
       onClose={onClose}
       open={Boolean(issued)}
-      title="Invitation created"
+      title={t("Invitation created")}
     >
       {issued ? (
         <div className="issued-invitation">
           <p>
-            Share this one-time code with <strong>{issued.invitation.email}</strong> using a secure channel.
+            {t("Share this one-time code with {email} using a secure channel.", { email: issued.invitation.email })}
           </p>
           <code>{issued.acceptance_token}</code>
         </div>

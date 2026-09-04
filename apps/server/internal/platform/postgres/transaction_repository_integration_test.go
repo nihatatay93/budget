@@ -93,7 +93,7 @@ func TestTransactionRepositoryLifecycleAndBalances(t *testing.T) {
 		Kind: transactiondomain.KindStandard, Status: transactiondomain.StatusPosted,
 		TransactionDate: date,
 		Entries:         []transactiondomain.EntryInput{{AccountID: checking.ID, AmountMinor: -1500}},
-		Allocations:     []transactiondomain.AllocationInput{{CategoryID: food.ID, AmountBaseMinor: -1500}},
+		Allocations:     []transactiondomain.AllocationInput{{CategoryID: food.ID, AmountBaseMinor: allocationAmountOf(-1500)}},
 	})
 	if err != nil {
 		t.Fatalf("create posted expense: %v", err)
@@ -168,6 +168,11 @@ func TestTransactionRepositoryLifecycleAndBalances(t *testing.T) {
 		t.Fatalf("soft-delete expense: %v", err)
 	}
 }
+
+// allocationAmountOf states an allocation amount explicitly. A nil amount would let the
+// service derive the lone allocation from the entry total, which is a different rule than
+// the one under test here.
+func allocationAmountOf(value int64) *int64 { return &value }
 
 func assertAccountBalance(
 	t *testing.T,

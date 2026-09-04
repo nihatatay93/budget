@@ -1,6 +1,7 @@
 import { type KeyboardEvent, type ReactNode, useEffect, useId, useRef } from "react";
 
 import { type Currency, formatMoney } from "../lib/currency";
+import { t } from "../lib/i18n";
 import { type AppIconName, AppIcon } from "./ExperiencePrimitives";
 
 export function PageHeader({
@@ -54,7 +55,7 @@ export function MoneyAmount({
   signed?: boolean;
 }) {
   const formatted = formatMoney(amount, currency);
-  const value = signed && amount > 0 && formatted !== "Amount unavailable" ? `+${formatted}` : formatted;
+  const value = signed && amount > 0 && Number.isSafeInteger(amount) ? `+${formatted}` : formatted;
   return <span className={`money-amount money-amount-${emphasis}`}>{value}</span>;
 }
 
@@ -136,7 +137,7 @@ export function EmptyState({
   );
 }
 
-export function LoadingState({ label = "Loading…", rows = 3 }: { label?: string; rows?: number }) {
+export function LoadingState({ label = t("Loading…"), rows = 3 }: { label?: string; rows?: number }) {
   return (
     <div aria-label={label} className="loading-state" role="status">
       <span className="visually-hidden">{label}</span>
@@ -234,7 +235,7 @@ export function ModalDialog({
             <h2 id={titleId}>{title}</h2>
             {description ? <p id={descriptionId}>{description}</p> : null}
           </div>
-          {dismissible ? <button aria-label="Close" className="modal-close" onClick={onClose} type="button">×</button> : null}
+          {dismissible ? <button aria-label={t("Close")} className="modal-close" onClick={onClose} type="button">×</button> : null}
         </header>
         <div className="modal-body">{children}</div>
         {footer ? <footer className="modal-footer">{footer}</footer> : null}
@@ -258,14 +259,14 @@ export function ToastRegion({
   onDismiss: (id: string) => void;
 }) {
   return (
-    <div aria-label="Notifications" aria-live="polite" className="toast-region" role="region">
+    <div aria-label={t("Notifications")} aria-live="polite" className="toast-region" role="region">
       {messages.map((message) => (
         <article className={`toast toast-${message.tone ?? "neutral"}`} key={message.id}>
           <div>
             <strong>{message.title}</strong>
             {message.description ? <p>{message.description}</p> : null}
           </div>
-          <button aria-label={`Dismiss ${message.title}`} onClick={() => onDismiss(message.id)} type="button">×</button>
+          <button aria-label={t("Dismiss {title}", { title: message.title })} onClick={() => onDismiss(message.id)} type="button">×</button>
         </article>
       ))}
     </div>

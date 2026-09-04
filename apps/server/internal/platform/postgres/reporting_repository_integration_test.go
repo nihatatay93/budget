@@ -267,7 +267,7 @@ func standardReportingTransaction(
 		Kind: transactiondomain.KindStandard, Status: status, TransactionDate: date,
 		Entries: []transactiondomain.EntryInput{{AccountID: accountID, AmountMinor: amount}},
 		Allocations: []transactiondomain.AllocationInput{{
-			CategoryID: categoryID, AmountBaseMinor: amount,
+			CategoryID: categoryID, AmountBaseMinor: &amount,
 		}},
 	}
 }

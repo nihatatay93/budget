@@ -116,8 +116,13 @@ func monthlyBudgetResponse(value budget.Budget) (openapi.MonthlyBudget, error) {
 		}
 		items = append(items, openapi.MonthlyBudgetItem{
 			Id: itemID, CategoryId: categoryID, CategoryName: item.CategoryName,
-			CategoryIcon: item.CategoryIcon, CategoryArchivedAt: item.CategoryArchivedAt,
-			PlannedBaseMinor: item.PlannedBaseMinor, UsedBaseMinor: item.UsedBaseMinor,
+			CategoryPredefinedKey: predefinedCategoryKey(item.CategoryPredefinedKey),
+			CategoryIcon:          item.CategoryIcon,
+			CategoryIconType:      openapi.CategoryIconType(item.CategoryIconType),
+			CategoryIconValue:     item.CategoryIconValue,
+			CategoryColorKey:      openapi.CategoryColorKey(item.CategoryColorKey),
+			CategoryArchivedAt:    item.CategoryArchivedAt,
+			PlannedBaseMinor:      item.PlannedBaseMinor, UsedBaseMinor: item.UsedBaseMinor,
 			RemainingBaseMinor: item.RemainingBaseMinor,
 		})
 	}
@@ -128,6 +133,14 @@ func monthlyBudgetResponse(value budget.Budget) (openapi.MonthlyBudget, error) {
 		RemainingBaseMinor: value.RemainingBaseMinor, Items: items,
 		CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
 	}, nil
+}
+
+func predefinedCategoryKey(value *string) *openapi.PredefinedCategoryKey {
+	if value == nil {
+		return nil
+	}
+	key := openapi.PredefinedCategoryKey(*value)
+	return &key
 }
 
 func budgetConflict(requestID, code, message string) openapi.ReplaceMonthlyBudget409JSONResponse {
